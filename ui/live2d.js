@@ -223,7 +223,7 @@
         const sk = SKIN_TONES[look(form, custom, 'skin')] || SKIN_TONES.porcelain;
         if (h.hair) {
           paint(groups.front, BLACK, h.hair);
-          paint(groups.back, BLACK, mix(h.hair, BLACK, .2));
+          paint(groups.back, BLACK, mix(h.hair, BLACK, .07));
           paint(groups.streak, BLACK, mix(h.hair, [1, 1, 1], .5));
           paint(groups.ears, h.hi, h.hair);
         } else for (const g of ['front', 'back', 'streak', 'ears']) paint(groups[g]);
