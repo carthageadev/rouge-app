@@ -31,6 +31,7 @@ let settings = {
   trail: true, ttl: 30, login: false, floatPos: null, custom: {}, boil: false,
 };
 let layout = null, drag = null, interactive = false, pinned = false;
+let hoverAt = 0, feedable = false, overHerAt = 0;
 let overlayDisplay = null, quitting = false;
 
 const byId = id => history.find(h => h.id === id);
@@ -234,6 +235,7 @@ async function writeItem(item, promote = true) {
 
 function sendTrail() {
   overlay?.webContents.send('trail', trail.map(byId).filter(Boolean).map(withIcon));
+  notch?.webContents.send('trailing', trail.length);
 }
 
 function stats() {
@@ -459,6 +461,7 @@ function computeLayout() {
     handle: float ? { x: pcx + PILL_W / 2 - 36, y: pillTop, w: 36, h: PILL_H } : null,
     open: { x: ox, y: openTop, w: OPEN_W, h: OPEN_H + (float ? 0 : 12) },
     bag: { x: ox + 72, y: openTop + 100 },
+    her: { x: ox + 8, y: openTop + 46, w: 122, h: 122 },
   };
   notch.setBounds({ x: layout.x, y: layout.y, width: NOTCH_W, height: NOTCH_H });
   notch.webContents.send('layout', { float, dir, pcx, pillTop });
@@ -485,8 +488,9 @@ function applySettings(patch) {
 function setHover(v) {
   hover = v;
   if (v) rememberFg();
+  hoverAt = v ? Date.now() : 0;
+  overHerAt = 0;
   notch.webContents.send('hover', v);
-  if (v && trail.length) absorb();
   if (!v && pinned) unpin();
 }
 
@@ -567,6 +571,11 @@ function tick() {
     leaveT = setTimeout(() => { leaveT = null; setHover(false); }, pinned ? 650 : 220);
   }
   setInteractive(hover || !!inRect(layout.handle));
+
+  if (hover && feedable && trail.length && Date.now() - hoverAt > 450 && inRect(layout.her)) {
+    if (!overHerAt) overHerAt = Date.now();
+    else if (Date.now() - overHerAt > 160) { overHerAt = 0; absorb(); }
+  } else overHerAt = 0;
 }
 
 function setInteractive(v) {
@@ -618,6 +627,7 @@ function clearAll() {
 
 ipcMain.handle('query', (_e, q) => query(q));
 ipcMain.on('pin', (_e, on) => on ? pin() : unpin());
+ipcMain.on('feedable', (_e, on) => { feedable = !!on; });
 ipcMain.on('remove', (_e, id) => {
   const it = byId(id);
   if (it) forget(it);

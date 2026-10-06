@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const N = $('notch'), panel = $('panel');
 let data = { recent: [], pouch: [], current: null, stats: { total: 0, kinds: {}, smart: [] }, icons: {}, xp: { level: 1, into: 0, need: 60 } };
-let open = false, freshId = null, shown = [], total = 0, mode = 'main', page = 0, reqToken = 0;
+let open = false, freshId = null, shown = [], total = 0, mode = 'main', page = 0, reqToken = 0, trailing = 0;
 const q = { kind: null, source: null, sourceItem: null, pouch: false, text: '' };
 let settings = { theme: 'dark', accent: '#ff4d5e', style: 'notch', mascot: 'mo', trail: true, ttl: 30, login: false };
 let view = 'grid';
@@ -120,6 +120,7 @@ $('mascot').addEventListener('contextmenu', e => {
   e.preventDefault();
   renderCustom();
   cust.classList.add('on');
+  syncFeed();
 });
 $('custTabs').addEventListener('click', e => { const t = e.target.closest('[data-tab]'); if (t) { custTab = t.dataset.tab; renderCustom(); } });
 $('custBody').addEventListener('click', e => {
@@ -130,13 +131,21 @@ $('custBody').addEventListener('click', e => {
   saveCustom(c);
 });
 $('custReset').onclick = () => saveCustom({});
-$('custClose').onclick = () => cust.classList.remove('on');
+$('custClose').onclick = () => { cust.classList.remove('on'); syncFeed(); };
 
 function renderMini() {
   const h = data.recent;
   $('miniStack').innerHTML = h.length ? h.slice(0, 4).map(i => miniTile(i)).join('') : '<span class="empty">copy something</span>';
   $('miniCount').textContent = data.pouch.length ? data.pouch.length + ' in pouch' : data.stats.total ? fmt(data.stats.total) : '';
   $('search').placeholder = data.stats.total ? `Search ${fmt(data.stats.total)} clips` : 'Search';
+}
+
+let lastFeedable = null;
+function syncFeed() {
+  const on = open && mode === 'main' && !panel.classList.contains('set') && !cust.classList.contains('on');
+  if (on !== lastFeedable) { lastFeedable = on; rouge.send('feedable', on); }
+  $('mascot').classList.toggle('hungry', on && trailing > 0 && data.pouch.length < CAP);
+  return on;
 }
 
 let popT;
@@ -147,7 +156,8 @@ function renderPouch(ev = {}) {
   $('lvl').innerHTML = `Lv ${lv.level}<i style="--p:${(lv.into / lv.need).toFixed(3)}"></i>`;
   $('lvl').title = `Level ${lv.level} · ${lv.into}/${lv.need} xp to the next level. She earns xp for every new clip you feed her.`;
   $('pouchTag').innerHTML = full ? '<span class="tag full">FULL</span>' : '';
-  $('pouchSub').textContent = !p.length ? 'Hover here while copies trail you to feed her.'
+  $('pouchSub').textContent = trailing && open && !full ? `Bring your trail onto ${who} to feed her.`
+    : !p.length ? 'Copies trail your cursor. Bring them onto her to keep them.'
     : full ? 'Full. Take something out to feed her more.'
     : `${p.length === 1 ? 'One clip' : p.length + ' clips'} kept safe. Carry them out any time.`;
   $('carry').disabled = !p.length;
@@ -249,6 +259,7 @@ const params = () => ({ kind: q.kind, source: q.source, pouch: q.pouch, text: q.
 async function refresh(animate) {
   const token = ++reqToken;
   N.classList.toggle('archive', mode === 'archive');
+  syncFeed();
   if (mode === 'archive') {
     const res = await rouge.invoke('query', { ...params(), offset: page * PAGE, limit: PAGE });
     if (token !== reqToken) return;
@@ -358,6 +369,7 @@ $('styles').addEventListener('click', e => { const o = e.target.closest('[data-s
 $('gear').addEventListener('click', () => {
   const on = !panel.classList.contains('set');
   panel.classList.toggle('set', on); $('gear').classList.toggle('on', on);
+  syncFeed();
 });
 
 rouge.on('layout', l => {
@@ -388,6 +400,8 @@ rouge.on('settings', applySettings);
 rouge.on('hover', v => {
   open = v;
   N.classList.toggle('open', v);
+  syncFeed();
+  renderPouch();
   if (v) { refresh(true); mascot.resume?.(); }
   else {
     panel.classList.remove('set'); $('gear').classList.remove('on'); cust.classList.remove('on');
@@ -396,6 +410,7 @@ rouge.on('hover', v => {
   }
 });
 rouge.on('search-blur', () => $('search').blur());
+rouge.on('trailing', n => { trailing = n; syncFeed(); renderPouch(); });
 
 let bumpT;
 rouge.on('state', s => {
