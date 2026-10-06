@@ -45,7 +45,7 @@ const APP_EXT = new Set(['exe', 'lnk', 'url', 'msi', 'ico', 'cpl', 'scr', 'appre
 const THUMB_EXT = new Set('png jpg jpeg gif webp bmp tif tiff heic avif ico psd mp4 mov mkv avi webm wmv m4v pdf'.split(' '));
 const iconKey = i => i.kind !== 'files' || i.dir0 ? null : APP_EXT.has(i.ext) ? 'p:' + i.paths[0].toLowerCase() : 'e:' + (i.ext || '');
 const pub = i => i && ({
-  ...i, paths: i.paths && i.paths.slice(0, 50),
+  ...i, paths: i.paths && i.paths.slice(0, 50), info: undefined,
   thumb: i.kind === 'image' || i.thumbed ? pathToFileURL(thumbPath(i.id)).href : undefined,
   ficon: i.kind === 'files' ? ficons[iconKey(i)] || null : undefined,
 });
@@ -215,10 +215,11 @@ function fileInfo(paths, total) {
 }
 
 async function probeFiles(item) {
-  const st = await Promise.all(item.paths.slice(0, 200).map(p => fs.promises.stat(p).catch(() => null)));
+  const st = await Promise.all(item.paths.map(p => fs.promises.stat(p).catch(() => null)));
   let nd = 0, nf = 0, size = 0;
   for (const s of st) if (s) { if (s.isDirectory()) nd++; else { nf++; size += s.size; } }
   Object.assign(item, { nd, nf, size, dir0: !!st[0]?.isDirectory() });
+  if (item.paths.length > 1) item.info = st.map(s => s ? [s.isDirectory() ? 1 : 0, s.isDirectory() ? 0 : s.size] : [0, -1]);
   if (st[0] && !item.dir0 && !item.thumbed && THUMB_EXT.has(item.ext)) {
     let img = null;
     try { img = await nativeImage.createThumbnailFromPath(item.paths[0], { width: 320, height: 320 }); } catch {}
@@ -774,6 +775,13 @@ function buildTray() {
 }
 
 ipcMain.on('copy', (_e, id) => { const it = byId(id); if (it) writeItem(it); });
+ipcMain.handle('files-of', (_e, id) => { const it = byId(id); return it?.kind === 'files' ? { paths: it.paths, info: it.info || [] } : null; });
+ipcMain.on('copy-files', async (_e, { id, idx } = {}) => {
+  const p = byId(id)?.kind === 'files' ? byId(id).paths[idx] : null;
+  if (typeof p !== 'string') return;
+  if (!(await exists(p))) return notice('That file moved or was deleted');
+  if (!(await setFiles([p], 'copy'))) notice('Could not put the file on the clipboard');
+});
 ipcMain.on('copy-text', (_e, text) => { if (typeof text === 'string' && text.trim() && text.length <= 200) clipboard.writeText(text); });
 ipcMain.on('menu-pick', (_e, id) => pasteItem(byId(id)));
 ipcMain.on('menu-height', (_e, h) => {

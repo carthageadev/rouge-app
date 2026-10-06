@@ -110,8 +110,10 @@
     const badge = n > 1 ? `<span class="g-count" style="${countTone(n)}">${n > 99 ? '99+' : n}</span>` : '';
     if (item.thumb) return `<img class="g-img" src="${item.thumb}" draggable="false" alt="">${badge}`;
     const ext = item.ext || '';
-    const one = item.dir0 || !ext ? (item.dir0 === false && item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : folder)
-      : extGlyph(ext) || typeGlyph(ext) || (item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : doc(ext.toUpperCase().slice(0, 4), EXT_TINT[ext] || '#6b7280'));
+    const ficon = item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : '';
+    const one = item.dir0 || (!ext && item.dir0 === undefined) ? folder
+      : !ext ? ficon || doc('FILE')
+      : extGlyph(ext) || typeGlyph(ext) || ficon || doc(ext.toUpperCase().slice(0, 4), EXT_TINT[ext] || '#6b7280');
     return one + badge;
   }
 

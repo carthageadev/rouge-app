@@ -193,7 +193,7 @@ const codeHead = (item, cls = 'lang') => `<div class="${cls}"><span class="li">$
 const codeBody = (item, n) => Rouge.highlight((item.text || '').replace(/\t/g, '  ').slice(0, n), item.lang === 'error' ? item.of : item.lang);
 
 function card(item, i) {
-  const meta = label => `<div class="meta">${item.kind === 'files' ? `<span class="${item.effect === 'move' ? 'cut' : ''}">${Rouge.esc(label)}</span>` : srcLabel(item, label)}<span class="tm">${pouchDot(item)}${ago(item.ts)}</span></div>`;
+  const meta = label => `<div class="meta">${item.kind === 'files' ? `<span class="fl${item.effect === 'move' ? ' cut' : ''}">${Rouge.esc(label)}</span>` : srcLabel(item, label)}<span class="tm">${pouchDot(item)}${ago(item.ts)}</span></div>`;
   const done = `<div class="done">Copied</div>`;
   const cv = item.id === data.current ? `<div class="cv" title="This is what Ctrl V pastes">CTRL V</div>` : '';
   const cls = `card c-${item.kind === 'image' || (item.kind === 'files' && item.thumb) ? 'img' : item.kind}${item.kind === 'files' ? ' c-files' : ''}${item.id === freshId ? ' fresh' : ''}`;
@@ -224,9 +224,10 @@ function card(item, i) {
       return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || t)}${more}</div><div class="path">${Rouge.esc(item.dir ?? '')}</div></div>${meta(item.count > 1 ? item.count + ' paths' : item.ext ? 'file' : 'folder')}${xBtn(item)}${done}</div>`;
     }
     case 'files': {
-      const more = item.count > 1 ? `<span class="more">+${item.count - 1}</span>` : '';
+      if (expanded.has(item.id)) return groupPanel(item, i);
+      const more = item.count > 1 ? xpBtn(item, true) : '';
       if (item.thumb) return `${head}<img src="${item.thumb}" draggable="false" alt="">${item.count > 1 ? `<span class="fcount">+${item.count - 1}</span>` : ''}<div class="fname">${Rouge.esc(item.name || '')}</div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
-      return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || '')}${more}</div><div class="path">${Rouge.esc(item.dir || '')}</div></div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
+      return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || '')}</div><div class="path">${more}${Rouge.esc(item.dir || '')}</div></div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
     }
     case 'code':
       return `${head}<div class="body">${codeHead(item)}<div class="code">${codeBody(item, 500)}</div></div>${meta('code')}${xBtn(item)}${done}</div>`;
@@ -240,7 +241,7 @@ function row(item, i) {
   const t = item.text ?? '';
   let body;
   if (item.kind === 'image') body = `Image · ${item.w}×${item.h}`;
-  else if (item.kind === 'files') body = `<b class="cnm">${Rouge.esc(item.name || '')}</b>${item.count > 1 ? `+${item.count - 1} more` : ''}<span class="dimx">${Rouge.esc(item.dir || '')}</span>`;
+  else if (item.kind === 'files') body = `<b class="cnm">${Rouge.esc(item.name || '')}</b>${item.count > 1 ? xpBtn(item) : ''}<span class="dimx">${Rouge.esc(item.dir || '')}</span>`;
   else if (item.kind === 'color') body = `<span class="swd" style="background:${Rouge.esc(item.hex || t.trim())}"></span>${item.cname ? `<b class="cnm">${Rouge.esc(item.cname)}</b>` : ''}${Rouge.esc(t.trim())}${item.hex && item.cfmt !== 'HEX' ? ` <span class="dimx">${Rouge.esc(item.hex.toUpperCase())}</span>` : ''}`;
   else if (item.kind === 'code') body = `<div class="code">${codeBody(item, 1200)}</div>`;
   else body = Rouge.esc(t.slice(0, 1200));
@@ -248,11 +249,52 @@ function row(item, i) {
   const title = item.src?.title && item.src.title !== name ? `<span>·</span><span class="ttl">${Rouge.esc(item.src.title)}</span>` : '';
   const kind = item.kind === 'code' ? `<span class="lk">${Rouge.esc(Rouge.langName(item))}</span><span>·</span>`
     : item.kind === 'files' ? `<span class="lk">${Rouge.esc(Rouge.filesLabel(item))}</span><span>·</span>` : '';
-  return `<div class="row c-${item.kind}" data-id="${item.id}" style="--i:${Math.min(i, 14)}">
+  const open = item.kind === 'files' && expanded.has(item.id);
+  const html = `<div class="row c-${item.kind}" data-id="${item.id}" style="--i:${Math.min(i, 14)}">
     <div class="rf${item.kind === 'image' ? ' big' : ''}">${Rouge.tile(item)}</div>
     <div class="rb"><div class="rt">${body}</div>
       <div class="rm">${item.id === data.current ? '<span class="cvi">CTRL V</span>' : ''}${kind}${name ? srcLabel(item, '') : `<span>${item.kind}</span>`}${title}<span>·</span>${pouchDot(item)}<span>${ago(item.ts)}</span></div></div>
     ${xBtn(item)}<div class="done">Copied</div></div>`;
+  return open ? `<div class="grp" style="--i:${Math.min(i, 14)}">${html}${subList(item)}</div>` : html;
+}
+
+// multi-file clips can be opened up to see every file inside
+const expanded = new Set(), subCache = new Map();
+const xpBtn = (item, short) => `<span class="xp${expanded.has(item.id) ? ' on' : ''}" data-xp="${item.id}" title="${expanded.has(item.id) ? 'Hide' : 'Show'} all ${item.count} items">+${item.count - 1}${short ? '' : ' more'}<i class="chev"></i></span>`;
+const SUB_FIRST = 300;
+function subList(item) {
+  const d = subCache.get(item.id);
+  if (!d) return `<div class="sub"><div class="sub-list"><div class="sub-note">Loading…</div></div></div>`;
+  const shown = d.all ? d.paths : d.paths.slice(0, SUB_FIRST);
+  const rows = shown.map((p, k) => {
+    const name = p.split(/[\\/]/).pop() || p, dir = p.slice(0, p.length - name.length).replace(/[\\/]+$/, '');
+    const [isDir, size] = d.info[k] || [];
+    const ext = isDir ? '' : ((/\.([a-z0-9]{1,20})$/i.exec(name) || [])[1] || '').toLowerCase();
+    return `<div class="si" data-gid="${item.id}" data-fi="${k}" title="${Rouge.esc(p)}  ·  click to copy just this one"><span class="sic">${Rouge.tile({ kind: 'files', ext, dir0: size === undefined ? undefined : !!isDir, count: 1 })}</span>`
+      + `<span class="sn">${Rouge.esc(name)}</span>${dir !== item.dir ? `<span class="sd">${Rouge.esc(dir)}</span>` : ''}`
+      + `<span class="ss">${isDir ? 'folder' : size >= 0 ? Rouge.fmtSize(size) : size === -1 ? 'missing' : ''}</span></div>`;
+  }).join('');
+  const rest = d.paths.length - shown.length;
+  const more = rest > 0 ? `<div class="sub-note link" data-all="${item.id}">Show ${fmt(rest)} more</div>` : '';
+  const lost = item.total > d.paths.length ? `<div class="sub-note">+${fmt(item.total - d.paths.length)} more were too many to keep</div>` : '';
+  return `<div class="sub"><div class="sub-list">${rows}${more}${lost}</div></div>`;
+}
+function groupPanel(item, i) {
+  return `<div class="gx" data-id="${item.id}" style="--i:${i}"><div class="gx-head"><div class="fav">${Rouge.tile(item)}</div>`
+    + `<div class="gx-t"><div class="dom">${Rouge.esc(item.name || '')}${xpBtn(item)}</div><div class="path">${Rouge.esc(Rouge.filesLabel(item))} · ${Rouge.esc(item.dir || '')}</div></div></div>`
+    + `${subList(item)}${xBtn(item)}<div class="done">Copied</div></div>`;
+}
+async function toggleGroup(id) {
+  if (expanded.has(id)) expanded.delete(id);
+  else {
+    expanded.add(id);
+    if (!subCache.has(id)) {
+      renderGrid(false);
+      const d = await rouge.invoke('files-of', id);
+      if (d) subCache.set(id, d); else expanded.delete(id);
+    }
+  }
+  renderGrid(false);
 }
 const tipRow = (tip, i) => `<div class="tip-row" style="--i:${i}">${kbd(tip.keys)}<span>${tip.t}</span></div>`;
 
@@ -410,6 +452,7 @@ grip.addEventListener('lostpointercapture', endDrag);
 grip.addEventListener('pointermove', e => { if (!e.buttons) endDrag(); });
 
 function resetView() {
+  expanded.clear(); subCache.clear();
   Object.assign(q, { kind: null, source: null, sourceItem: null, pouch: false, text: '' });
   mode = 'main'; page = 0;
   $('search').value = '';
@@ -491,9 +534,19 @@ function onListClick(e) {
   if (out) { rouge.send('unpouch', out.dataset.out); return; }
   const x = e.target.closest('[data-x]');
   if (x) { rouge.send('remove', x.dataset.x); return; }
+  const xp = e.target.closest('[data-xp]');
+  if (xp) { toggleGroup(xp.dataset.xp); return; }
+  const all = e.target.closest('[data-all]');
+  if (all) { const d = subCache.get(all.dataset.all); if (d) { d.all = true; renderGrid(false); } return; }
+  const si = e.target.closest('.si');
+  if (si) {
+    rouge.send('copy-files', { id: si.dataset.gid, idx: +si.dataset.fi });
+    si.classList.add('copied'); setTimeout(() => si.classList.remove('copied'), 700);
+    return;
+  }
   const alt = e.target.closest('[data-alt]');
   if (alt) { rouge.send('copy-text', alt.dataset.alt); flash(alt.closest('[data-id]')?.dataset.id); return; }
-  const c = e.target.closest('.card, .row, .ar');
+  const c = e.target.closest('.card, .row, .ar, .gx');
   if (!c) return;
   rouge.send('copy', c.dataset.id);
   flash(c.dataset.id);

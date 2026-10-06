@@ -211,6 +211,41 @@
     background: rgba(0,0,0,.55); color: #fff; }
   .c-files:has(.cv) .fcount { top: 26px; }
   .notice { color: var(--rouge) !important; }
+  .xp { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 6px 1px 7px; border-radius: 7px; background: var(--ink-3); color: var(--fg-2);
+    font-size: 10px; font-weight: 600; cursor: pointer; vertical-align: 1px; transition: background .15s, color .15s; white-space: nowrap; }
+  .xp:hover, .xp.on { background: var(--soft); color: var(--rouge); }
+  .xp .chev { width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-1.5px) rotate(45deg); transition: transform .3s var(--spring); }
+  .xp.on .chev { transform: translateY(1px) rotate(-135deg); }
+  .dom .xp { font-size: 9.5px; padding: 0 5px 0 6px; }
+  .path .xp { margin: 0 5px 0 0; font-size: 9.5px; padding: 0 5px 0 6px; vertical-align: 0; }
+  .card .meta .fl { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .grp { position: relative; margin-bottom: 6px; border-radius: 12px; background: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line);
+    animation: rise .45s var(--spring) backwards; animation-delay: calc(var(--i) * 22ms + 100ms); }
+  .grid.static .grp, .grid.static .gx { animation: none; }
+  .grp > .row { position: sticky; top: 0; z-index: 3; margin-bottom: 0; background: var(--ink-2); border-radius: 12px 12px 0 0; animation: none; }
+  .grp .sub { padding: 0 12px 12px 58px; }
+  .sub-list { max-height: 168px; overflow-y: auto; overflow-x: hidden; border-radius: 9px; background: var(--ink); box-shadow: inset 0 0 0 1px var(--line); padding: 4px; }
+  .sub-list::-webkit-scrollbar { width: 5px; } .sub-list::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 3px; }
+  .si { display: flex; align-items: center; gap: 7px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: 10.5px; cursor: pointer; transition: background .12s, color .12s; }
+  .si:hover { background: var(--ink-3); }
+  .si.copied { background: var(--soft); color: var(--rouge); }
+  .si .sic { position: relative; width: 14px; height: 14px; border-radius: 4px; background: #fff; flex: none; display: grid; place-items: center; }
+  .si .sn { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .si .sd { flex: 0 1 auto; max-width: 38%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg-3); font-size: 9.5px; }
+  .si .ss { flex: none; color: var(--fg-3); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+  .sub-note { padding: 5px 8px; font-size: 10px; color: var(--fg-3); }
+  .sub-note.link { color: var(--rouge); font-weight: 600; cursor: pointer; }
+  .gx { grid-column: 1 / -1; grid-row: span 2; position: relative; display: flex; flex-direction: column; border-radius: 13px; background: var(--ink-2);
+    box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; animation: rise .5s var(--spring) backwards; animation-delay: calc(var(--i) * 28ms + 120ms); }
+  .gx-head { display: flex; align-items: center; gap: 10px; padding: 10px 40px 8px 12px; cursor: pointer; flex: none; }
+  .gx-head .gx-t { min-width: 0; flex: 1; }
+  .gx-head .dom { margin-top: 0; }
+  .gx .sub { flex: 1; min-height: 0; display: flex; padding: 0 10px 10px; }
+  .gx .sub-list { flex: 1; max-height: none; }
+  .gx .x { position: absolute; top: 9px; right: 9px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff;
+    display: grid; place-items: center; z-index: 3; opacity: .55; transition: opacity .15s, background .15s; cursor: pointer; }
+  .gx:hover .x { opacity: 1; } .gx .x:hover { background: var(--rouge); }
+  .gx .done { position: absolute; inset: 0; }
   .card .meta .cut { color: var(--rouge); font-weight: 600; }
   .c-img .meta .cut { color: #fff; }
   .c-img::after { content: ""; position: absolute; inset: 55% 0 0; background: linear-gradient(transparent, rgba(0,0,0,.45)); pointer-events: none; }
