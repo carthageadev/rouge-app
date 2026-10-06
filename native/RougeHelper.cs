@@ -24,6 +24,16 @@ public static class RougeHelper
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, int f, StringBuilder s, ref int n);
     [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint a, bool i, uint pid);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("user32.dll")] static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll")] static extern bool IsClipboardFormatAvailable(uint f);
+    [DllImport("user32.dll")] static extern bool OpenClipboard(IntPtr h);
+    [DllImport("user32.dll")] static extern bool CloseClipboard();
+    [DllImport("user32.dll")] static extern IntPtr GetClipboardData(uint f);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterClipboardFormat(string name);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern uint DragQueryFile(IntPtr h, uint i, StringBuilder s, uint n);
+    [DllImport("kernel32.dll")] static extern IntPtr GlobalLock(IntPtr h);
+    [DllImport("kernel32.dll")] static extern bool GlobalUnlock(IntPtr h);
+    [DllImport("kernel32.dll")] static extern UIntPtr GlobalSize(IntPtr h);
 
     [StructLayout(LayoutKind.Sequential)] public struct MSG { public IntPtr h; public uint m; public IntPtr w; public IntPtr l; public uint t; public int x; public int y; }
     [StructLayout(LayoutKind.Sequential)] struct MSLL { public int x; public int y; public uint data; public uint flags; public uint time; public IntPtr extra; }
@@ -172,9 +182,111 @@ public static class RougeHelper
         keybd_event(VK_CTRL, 0, KEYUP, UIntPtr.Zero);
     }
 
+    const uint CF_HDROP = 15;
+    const int MAX_FILES = 2000;
+    static uint cfEffect;
+
+    static string ReadClip(uint seq, bool init)
+    {
+        string head = "{\"type\":\"clip\",\"seq\":" + seq + ",\"init\":" + (init ? "true" : "false");
+        if (!IsClipboardFormatAvailable(CF_HDROP)) return head + ",\"files\":null}";
+        bool open = false;
+        for (int i = 0; i < 6 && !(open = OpenClipboard(IntPtr.Zero)); i++) Thread.Sleep(15);
+        if (!open) return null;
+        var sb = new StringBuilder();
+        int effect = 0;
+        try
+        {
+            IntPtr h = GetClipboardData(CF_HDROP);
+            if (h == IntPtr.Zero) return head + ",\"files\":null}";
+            uint total = DragQueryFile(h, 0xFFFFFFFF, null, 0);
+            uint n = Math.Min(total, (uint)MAX_FILES);
+            var name = new StringBuilder(32768);
+            sb.Append(",\"files\":[");
+            for (uint i = 0; i < n; i++)
+            {
+                name.Length = 0;
+                DragQueryFile(h, i, name, (uint)name.Capacity);
+                if (i > 0) sb.Append(',');
+                sb.Append('"').Append(Esc(name.ToString())).Append('"');
+            }
+            sb.Append("],\"total\":").Append(total);
+            if (cfEffect != 0 && IsClipboardFormatAvailable(cfEffect))
+            {
+                IntPtr e = GetClipboardData(cfEffect);
+                IntPtr p = e == IntPtr.Zero ? IntPtr.Zero : GlobalLock(e);
+                if (p != IntPtr.Zero)
+                {
+                    try { if ((ulong)GlobalSize(e) >= 4) effect = Marshal.ReadInt32(p); }
+                    finally { GlobalUnlock(e); }
+                }
+            }
+        }
+        finally { CloseClipboard(); }
+        return head + sb.ToString() + ",\"effect\":" + effect + "}";
+    }
+
+    static void WatchClipboard()
+    {
+        var t = new Thread(() =>
+        {
+            cfEffect = RegisterClipboardFormat("Preferred DropEffect");
+            uint last = 0;
+            bool first = true;
+            while (true)
+            {
+                try
+                {
+                    uint seq = GetClipboardSequenceNumber();
+                    if (first || seq != last)
+                    {
+                        if (!first) Thread.Sleep(70);
+                        uint settled = GetClipboardSequenceNumber();
+                        if (first || settled == seq)
+                        {
+                            string json = ReadClip(settled, first);
+                            if (json != null) { Emit(json); last = settled; first = false; }
+                        }
+                    }
+                }
+                catch (Exception e) { Emit("{\"type\":\"error\",\"msg\":\"clip " + Esc(e.Message) + "\"}"); }
+                Thread.Sleep(150);
+            }
+        });
+        t.IsBackground = true;
+        t.Start();
+    }
+
+    static bool SetFiles(string[] paths, int effect)
+    {
+        bool ok = false;
+        string err = null;
+        var t = new Thread(() =>
+        {
+            try
+            {
+                var list = new System.Collections.Specialized.StringCollection();
+                list.AddRange(paths);
+                var data = new System.Windows.Forms.DataObject();
+                data.SetFileDropList(list);
+                data.SetData("Preferred DropEffect", new System.IO.MemoryStream(BitConverter.GetBytes(effect)));
+                System.Windows.Forms.Clipboard.SetDataObject(data, true, 10, 40);
+                ok = true;
+            }
+            catch (Exception e) { err = e.Message; }
+        });
+        t.SetApartmentState(ApartmentState.STA);
+        t.IsBackground = true;
+        t.Start();
+        if (!t.Join(5000)) err = "timed out";
+        if (err != null) Emit("{\"type\":\"error\",\"msg\":\"setfiles " + Esc(err) + "\"}");
+        return ok;
+    }
+
     public static void Run()
     {
         StartHooks();
+        WatchClipboard();
         Emit("{\"type\":\"ready\"}");
         string line;
         while ((line = Console.In.ReadLine()) != null)
@@ -188,6 +300,13 @@ public static class RougeHelper
                     case "keys": KeysOn = parts.Length > 1 && parts[1] == "1"; break;
                     case "paste": Paste(); break;
                     case "activate": Activate(new IntPtr(long.Parse(parts[1]))); break;
+                    case "setfiles":
+                        {
+                            var p = line.TrimEnd('\r', '\n').Split(new[] { ' ' }, 4);
+                            bool ok = p.Length == 4 && SetFiles(p[3].Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries), int.Parse(p[2]));
+                            Emit("{\"type\":\"setfiles\",\"id\":" + long.Parse(p[1]) + ",\"ok\":" + (ok ? "true" : "false") + "}");
+                            break;
+                        }
                 }
             }
             catch (Exception e) { Emit("{\"type\":\"error\",\"msg\":\"" + Esc(e.Message) + "\"}"); }

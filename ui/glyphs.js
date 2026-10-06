@@ -80,6 +80,34 @@
     return null;
   }
 
+  const GROUPS = {
+    image: ['png jpg jpeg gif webp bmp tif tiff heic avif ico svg jfif', () => svg(bg('#ec4899') + '<path d="M4.6 17.6l4.6-5.7 3.2 3.9 2.3-2.8 4.8 4.6z" fill="#fff"/><circle cx="15.6" cy="8.2" r="1.9" fill="#fff"/>')],
+    video: ['mp4 mov mkv avi webm wmv m4v flv mpg mpeg', () => svg(bg('#7c3aed') + '<rect x="4.6" y="6.6" width="14.8" height="10.8" rx="2.4" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M10.4 9.5v5l4.2-2.5z" fill="#fff"/>')],
+    audio: ['mp3 wav flac ogg m4a aac opus wma aiff mid midi', () => svg(bg('#16a34a') + '<path d="M10 16.4V7.7l7-1.6v8.6" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.3" cy="16.6" r="2" fill="#fff"/><circle cx="15.3" cy="14.8" r="2" fill="#fff"/>')],
+    pdf: ['pdf', () => word('#e0453a', '#fff', 'PDF', 7.4)],
+    word: ['doc docx odt rtf pages', () => word('#2b579a', '#fff', 'W', 11)],
+    sheet: ['xls xlsx xlsm csv tsv ods numbers', () => word('#217346', '#fff', 'X', 11)],
+    slides: ['ppt pptx odp key', () => word('#d24726', '#fff', 'P', 11)],
+    archive: ['zip rar 7z tar gz tgz bz2 xz iso dmg cab', () => svg(bg('#a16207') + '<path d="M12 3.6v7.6" stroke="#fff" stroke-width="2.4" stroke-dasharray="1.6 1.4"/><rect x="9.6" y="11.4" width="4.8" height="6" rx="1.2" fill="#fff"/><rect x="11.1" y="13.8" width="1.8" height="1.6" fill="#a16207"/>')],
+    font: ['ttf otf woff woff2 fon', () => svg(bg('#334155') + '<text x="12" y="16.2" text-anchor="middle" font-family="Georgia,serif" font-size="11" font-weight="700" fill="#fff">Aa</text>')],
+    text: ['txt log ini cfg conf env toml nfo', () => svg(bg('#ffffff') + '<path d="M6.5 7.5h11M6.5 10.5h11M6.5 13.5h11M6.5 16.5h7" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>')],
+    psd: ['psd psb', () => word('#001e36', '#31a8ff', 'Ps', 10)],
+    ai: ['ai eps', () => word('#330000', '#ff9a00', 'Ai', 10)],
+  };
+  const TYPE_OF = {};
+  for (const [k, [exts]] of Object.entries(GROUPS)) for (const e of exts.split(' ')) TYPE_OF[e] = k;
+  const typeGlyph = ext => TYPE_OF[ext] ? GROUPS[TYPE_OF[ext]][1]() : null;
+
+  function fileTile(item) {
+    const n = item.count || item.paths?.length || 1;
+    const badge = n > 1 ? `<span class="g-count">${n > 99 ? '99+' : n}</span>` : '';
+    if (item.thumb) return `<img class="g-img" src="${item.thumb}" draggable="false" alt="">${badge}`;
+    const ext = item.ext || '';
+    const one = item.dir0 || !ext ? (item.dir0 === false && item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : folder)
+      : extGlyph(ext) || typeGlyph(ext) || (item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : doc(ext.toUpperCase().slice(0, 4), EXT_TINT[ext] || '#6b7280'));
+    return one + badge;
+  }
+
   function favicon(host) {
     if (!host || /^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/.test(host)) return '';
     const alt = `https://${esc(host)}/favicon.ico`;
@@ -100,7 +128,8 @@
         return `<div class="g-link" style="--h:${h}">${esc(d.charAt(0).toUpperCase())}${favicon(d)}</div>`;
       }
       case 'email': return envelope;
-      case 'path': return item.ext ? extGlyph(item.ext) || doc(item.ext.toUpperCase().slice(0, 4), EXT_TINT[item.ext] || '#6b7280') : folder;
+      case 'files': return fileTile(item);
+      case 'path': return item.ext ? extGlyph(item.ext) || typeGlyph(item.ext) || doc(item.ext.toUpperCase().slice(0, 4), EXT_TINT[item.ext] || '#6b7280') : folder;
       case 'code': return LANG_ICONS[item.lang] ? LANG_ICONS[item.lang](item) : `<div class="g-code">&lt;/&gt;</div>`;
       default: return doc();
     }
@@ -136,9 +165,22 @@
   const srcName = item => item.src ? (item.src.site || item.src.app || '') : '';
   const srcKey = item => item.src ? (item.src.site ? 'site:' + item.src.site : item.src.exe ? 'app:' + item.src.exe.toLowerCase() : '') : '';
 
+  const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(b < 10240 ? 1 : 0) + ' KB' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1073741824).toFixed(2) + ' GB';
+  function filesLabel(item) {
+    const n = item.count || 1, cut = item.effect === 'move' ? 'Cut · ' : '';
+    if (n > 1) {
+      if (item.nd === undefined || n > 200) return cut + n + ' items';
+      const parts = [item.nf && `${item.nf} file${item.nf > 1 ? 's' : ''}`, item.nd && `${item.nd} folder${item.nd > 1 ? 's' : ''}`].filter(Boolean);
+      return cut + (parts.join(' · ') || n + ' items');
+    }
+    if (item.dir0) return cut + 'Folder';
+    return cut + (item.size !== undefined && item.nf ? fmtSize(item.size) : 'File');
+  }
+
   function preview(item, n = 60) {
     const t = (item.text || '').replace(/\s+/g, ' ').trim();
     if (item.kind === 'image') return `Image · ${item.w}×${item.h}`;
+    if (item.kind === 'files') return (item.name || 'Files') + (item.count > 1 ? ` +${item.count - 1} more` : '');
     return t.length > n ? t.slice(0, n - 1) + '…' : t;
   }
 
@@ -200,5 +242,5 @@
     return out + esc(code.slice(last));
   }
 
-  window.Rouge = { tile, favOn, colorAlts, esc, domain, hue, srcIcon, srcName, srcKey, preview, langName, highlight, LANG_NAMES };
+  window.Rouge = { tile, favOn, colorAlts, filesLabel, fmtSize, esc, domain, hue, srcIcon, srcName, srcKey, preview, langName, highlight, LANG_NAMES };
 })();

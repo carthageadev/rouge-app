@@ -52,7 +52,7 @@
         <div class="num">${i < 9 ? i + 1 : ''}</div>
         <div class="f${it.kind === 'image' ? ' wide' : ''}">${Rouge.tile(it)}</div>
         <div class="tx">
-          <div class="t1">${Rouge.esc(it.kind === 'image' ? Rouge.preview(it) : (it.text || '').slice(0, 220))}</div>
+          <div class="t1">${Rouge.esc(it.kind === 'image' || it.kind === 'files' ? Rouge.preview(it) : (it.text || '').slice(0, 220))}</div>
           <div class="t2">${it.kind === 'code' ? `<b>${Rouge.esc(Rouge.langName(it))}</b><span>·</span>` : ''}${Rouge.srcIcon(it)}<span>${Rouge.esc(Rouge.srcName(it) || it.kind)}</span><span>· ${ago(it.ts)}</span></div>
         </div>
         ${it.id === current ? '<span class="on-cb">on clipboard</span>' : ''}

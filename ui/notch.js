@@ -15,6 +15,7 @@ const TYPES = [
   { key: 'color', label: 'Colors', dot: 'conic-gradient(#ff4d5e,#ffd166,#4ade80,#6aa8ff,#c084fc,#ff4d5e)' },
   { key: 'code', label: 'Code', dot: '#ff6b7a' },
   { key: 'path', label: 'Paths', dot: '#e8b22d' },
+  { key: 'files', label: 'Files', dot: '#fb923c' },
 ];
 
 const TIPS = [
@@ -192,10 +193,10 @@ const codeHead = (item, cls = 'lang') => `<div class="${cls}"><span class="li">$
 const codeBody = (item, n) => Rouge.highlight((item.text || '').replace(/\t/g, '  ').slice(0, n), item.lang === 'error' ? item.of : item.lang);
 
 function card(item, i) {
-  const meta = label => `<div class="meta">${srcLabel(item, label)}<span class="tm">${pouchDot(item)}${ago(item.ts)}</span></div>`;
+  const meta = label => `<div class="meta">${item.kind === 'files' ? `<span class="${item.effect === 'move' ? 'cut' : ''}">${Rouge.esc(label)}</span>` : srcLabel(item, label)}<span class="tm">${pouchDot(item)}${ago(item.ts)}</span></div>`;
   const done = `<div class="done">Copied</div>`;
   const cv = item.id === data.current ? `<div class="cv" title="This is what Ctrl V pastes">CTRL V</div>` : '';
-  const cls = `card c-${item.kind === 'image' ? 'img' : item.kind}${item.id === freshId ? ' fresh' : ''}`;
+  const cls = `card c-${item.kind === 'image' || (item.kind === 'files' && item.thumb) ? 'img' : item.kind}${item.kind === 'files' ? ' c-files' : ''}${item.id === freshId ? ' fresh' : ''}`;
   const head = `<div class="${cls}" data-id="${item.id}" style="--i:${i}" title="${Rouge.esc(item.src?.title || '')}">${cv}`;
   const t = item.text ?? '';
   switch (item.kind) {
@@ -222,6 +223,11 @@ function card(item, i) {
       const more = item.count > 1 ? `<span class="more">+${item.count - 1}</span>` : '';
       return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || t)}${more}</div><div class="path">${Rouge.esc(item.dir ?? '')}</div></div>${meta(item.count > 1 ? item.count + ' paths' : item.ext ? 'file' : 'folder')}${xBtn(item)}${done}</div>`;
     }
+    case 'files': {
+      const more = item.count > 1 ? `<span class="more">+${item.count - 1}</span>` : '';
+      if (item.thumb) return `${head}<img src="${item.thumb}" draggable="false" alt="">${item.count > 1 ? `<span class="fcount">+${item.count - 1}</span>` : ''}<div class="fname">${Rouge.esc(item.name || '')}</div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
+      return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || '')}${more}</div><div class="path">${Rouge.esc(item.dir || '')}</div></div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
+    }
     case 'code':
       return `${head}<div class="body">${codeHead(item)}<div class="code">${codeBody(item, 500)}</div></div>${meta('code')}${xBtn(item)}${done}</div>`;
     default:
@@ -234,12 +240,14 @@ function row(item, i) {
   const t = item.text ?? '';
   let body;
   if (item.kind === 'image') body = `Image · ${item.w}×${item.h}`;
+  else if (item.kind === 'files') body = `<b class="cnm">${Rouge.esc(item.name || '')}</b>${item.count > 1 ? `+${item.count - 1} more` : ''}<span class="dimx">${Rouge.esc(item.dir || '')}</span>`;
   else if (item.kind === 'color') body = `<span class="swd" style="background:${Rouge.esc(item.hex || t.trim())}"></span>${item.cname ? `<b class="cnm">${Rouge.esc(item.cname)}</b>` : ''}${Rouge.esc(t.trim())}${item.hex && item.cfmt !== 'HEX' ? ` <span class="dimx">${Rouge.esc(item.hex.toUpperCase())}</span>` : ''}`;
   else if (item.kind === 'code') body = `<div class="code">${codeBody(item, 1200)}</div>`;
   else body = Rouge.esc(t.slice(0, 1200));
   const name = Rouge.srcName(item);
   const title = item.src?.title && item.src.title !== name ? `<span>·</span><span class="ttl">${Rouge.esc(item.src.title)}</span>` : '';
-  const kind = item.kind === 'code' ? `<span class="lk">${Rouge.esc(Rouge.langName(item))}</span><span>·</span>` : '';
+  const kind = item.kind === 'code' ? `<span class="lk">${Rouge.esc(Rouge.langName(item))}</span><span>·</span>`
+    : item.kind === 'files' ? `<span class="lk">${Rouge.esc(Rouge.filesLabel(item))}</span><span>·</span>` : '';
   return `<div class="row c-${item.kind}" data-id="${item.id}" style="--i:${Math.min(i, 14)}">
     <div class="rf${item.kind === 'image' ? ' big' : ''}">${Rouge.tile(item)}</div>
     <div class="rb"><div class="rt">${body}</div>
@@ -421,6 +429,14 @@ rouge.on('hover', v => {
   }
 });
 rouge.on('search-blur', () => $('search').blur());
+let noticeT;
+rouge.on('notice', text => {
+  if (open) { mascot.say(text); return; }
+  const el = $('miniCount');
+  el.textContent = text; el.classList.add('notice');
+  clearTimeout(noticeT);
+  noticeT = setTimeout(() => { el.classList.remove('notice'); renderMini(); }, 2600);
+});
 rouge.on('trailing', n => { trailing = n; syncFeed(); renderPouch(); });
 
 let bumpT;

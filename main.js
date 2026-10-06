@@ -22,7 +22,7 @@ const BROWSERS = /^(chrome|msedge|brave|vivaldi|opera|firefox|arc|thorium|chromi
 
 let STORE, IMG_DIR, THUMB_DIR;
 let overlay, notch, menu, tray;
-let history = [], trail = [], pouch = [], icons = {}, xp = 0;
+let history = [], trail = [], pouch = [], icons = {}, ficons = {}, xp = 0;
 const held = new Set();
 const trailAt = new Map();
 let currentId = null;
@@ -39,13 +39,20 @@ const byId = id => history.find(h => h.id === id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const DETECTED = ['lang', 'of', 'url', 'email', 'ext', 'name', 'path', 'dir', 'line', 'count', 'paths', 'hex', 'alpha', 'cname', 'cexact', 'cfmt'];
 const thumbPath = id => path.join(THUMB_DIR, id + '.png');
-const pub = i => i && ({ ...i, thumb: i.kind === 'image' ? pathToFileURL(thumbPath(i.id)).href : undefined });
+const APP_EXT = new Set(['exe', 'lnk', 'url', 'msi', 'ico', 'cpl', 'scr', 'appref-ms']);
+const THUMB_EXT = new Set('png jpg jpeg gif webp bmp tif tiff heic avif ico psd mp4 mov mkv avi webm wmv m4v pdf'.split(' '));
+const iconKey = i => i.kind !== 'files' || i.dir0 ? null : APP_EXT.has(i.ext) ? 'p:' + i.paths[0].toLowerCase() : 'e:' + (i.ext || '');
+const pub = i => i && ({
+  ...i, paths: i.paths && i.paths.slice(0, 50),
+  thumb: i.kind === 'image' || i.thumbed ? pathToFileURL(thumbPath(i.id)).href : undefined,
+  ficon: i.kind === 'files' ? ficons[iconKey(i)] || null : undefined,
+});
 const withIcon = i => i && ({ ...pub(i), icon: icons[i.src?.exe] || null });
 const kindGroup = i => i.kind === 'email' ? 'link' : i.kind;
 const sourceKey = i => i.src ? (i.src.site ? 'site:' + i.src.site : i.src.exe ? 'app:' + i.src.exe.toLowerCase() : null) : null;
 
 function classify(item) {
-  if (item.kind === 'image') return item;
+  if (item.kind === 'image' || item.kind === 'files') return item;
   for (const k of DETECTED) delete item[k];
   return Object.assign(item, detect(item.text || ''));
 }
@@ -55,6 +62,7 @@ function load() {
     const d = JSON.parse(fs.readFileSync(STORE, 'utf8'));
     history = d.history || [];
     icons = d.icons || {};
+    ficons = d.ficons || {};
     xp = d.xp || 0;
     settings = { ...settings, ...(d.settings || {}) };
     pouch = (d.pouch || []).filter(id => byId(id));
@@ -73,7 +81,7 @@ function load() {
 let saveT;
 function save() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => fs.writeFile(STORE, JSON.stringify({ history, pouch, icons, settings, xp }), () => {}), 400);
+  saveT = setTimeout(() => fs.writeFile(STORE, JSON.stringify({ history, pouch, icons, ficons, settings, xp }), () => {}), 400);
 }
 
 function level() {
@@ -82,10 +90,10 @@ function level() {
   return { xp, level: lvl, into, need };
 }
 
+// only ever removes rouge's own cached images, never anything a files clip points at
 function forget(item) {
-  if (item.kind !== 'image') return;
-  fs.unlink(path.join(IMG_DIR, item.id + '.png'), () => {});
-  fs.unlink(thumbPath(item.id), () => {});
+  if (item.kind === 'image') fs.unlink(path.join(IMG_DIR, item.id + '.png'), () => {});
+  if (item.kind === 'image' || item.thumbed) fs.unlink(thumbPath(item.id), () => {});
 }
 
 let helper = null, helperBuf = '', reqId = 0;
@@ -106,7 +114,11 @@ function startHelper() {
     }
   });
   helper.stderr.on('data', d => clog('[helper]', String(d)));
-  helper.on('exit', () => { helper = null; if (!quitting) setTimeout(startHelper, 2000); });
+  helper.on('exit', () => {
+    helper = null; helperClips = false; filesOnClip = false;
+    for (const [id, r] of pending) { pending.delete(id); r(null); }
+    if (!quitting) setTimeout(startHelper, 2000);
+  });
 }
 const hsend = cmd => helper?.stdin.write(cmd + '\n');
 function foreground() {
@@ -125,8 +137,93 @@ function onHelper(line) {
   else if (m.type === 'wheel') onAltWheel(m.delta);
   else if (m.type === 'key') onMenuKey(m.vk);
   else if (m.type === 'click') onGlobalClick(m.x, m.y);
+  else if (m.type === 'clip') onClip(m);
+  else if (m.type === 'setfiles') { const r = pending.get(m.id); if (r) { pending.delete(m.id); r(!!m.ok); } }
   else if (m.type === 'error') clog('[helper]', m.msg);
 }
+function setFiles(paths, effect) {
+  return new Promise(res => {
+    if (!helper) return res(false);
+    const id = ++reqId;
+    pending.set(id, ok => res(!!ok));
+    hsend(`setfiles ${id} ${effect === 'move' ? 2 : 5} ${paths.join('|')}`);
+    setTimeout(() => { if (pending.delete(id)) res(false); }, 6000);
+  });
+}
+
+// the helper reports every clipboard change; files are read there, text and images here
+function onClip(m) {
+  helperClips = true;
+  const files = Array.isArray(m.files) ? m.files.filter(f => typeof f === 'string' && f) : [];
+  filesOnClip = files.length > 0;
+  if (!filesOnClip) return pollClipboard(true);
+  const sig = 'f:' + files.join('|').toLowerCase();
+  const effect = (m.effect & 2) && !(m.effect & 1) ? 'move' : 'copy';
+  const known = history.find(h => h.sig === sig);
+  if (m.init || sig === lastSig) {
+    lastSig = sig;
+    if (known && m.init) currentId = known.id;
+    if (known && !m.init && known.effect !== effect) { known.effect = effect; save(); broadcast(); }
+    return;
+  }
+  lastSig = sig;
+  addItem({ sig, kind: 'files', paths: files, total: Math.max(files.length, m.total | 0), effect });
+}
+
+function fileInfo(paths, total) {
+  const p0 = paths[0], name = path.win32.basename(p0) || p0;
+  const ext = (name.match(/\.([a-z0-9]{1,10})$/i) || [])[1];
+  return { name, dir: path.win32.dirname(p0) === p0 ? '' : path.win32.dirname(p0), ext: ext ? ext.toLowerCase() : '', count: total };
+}
+
+async function probeFiles(item) {
+  const st = await Promise.all(item.paths.slice(0, 200).map(p => fs.promises.stat(p).catch(() => null)));
+  let nd = 0, nf = 0, size = 0;
+  for (const s of st) if (s) { if (s.isDirectory()) nd++; else { nf++; size += s.size; } }
+  Object.assign(item, { nd, nf, size, dir0: !!st[0]?.isDirectory() });
+  if (st[0] && !item.dir0 && THUMB_EXT.has(item.ext)) {
+    let img = null;
+    try { img = await nativeImage.createThumbnailFromPath(item.paths[0], { width: 320, height: 320 }); } catch {}
+    if ((!img || img.isEmpty()) && /^(png|jpe?g|gif|bmp|ico)$/.test(item.ext) && st[0].size < 40e6) {
+      img = nativeImage.createFromPath(item.paths[0]);
+      if (!img.isEmpty() && img.getSize().width > 320) img = img.resize({ width: 320, quality: 'good' });
+    }
+    if (img && !img.isEmpty()) {
+      try { await fs.promises.writeFile(thumbPath(item.id), img.toPNG()); item.thumbed = true; } catch {}
+    }
+  }
+  const key = iconKey(item);
+  if (st[0] && key && !ficons[key]) {
+    try {
+      const ic = await app.getFileIcon(item.paths[0], { size: 'large' });
+      if (!ic.isEmpty()) {
+        if (Object.keys(ficons).length > 400) for (const k of Object.keys(ficons)) if (k.startsWith('p:')) delete ficons[k];
+        ficons[key] = ic.toDataURL();
+      }
+    } catch {}
+  }
+  if (!byId(item.id)) { forget(item); return; }
+  save();
+  broadcast();
+}
+
+const exists = p => new Promise(res => {
+  const t = setTimeout(() => res(true), 1500);
+  fs.access(p, e => { clearTimeout(t); res(!e); });
+});
+async function writeFiles(item) {
+  if (!helper) return 'Give me a second, still waking up';
+  if ((item.total || 0) > item.paths.length) return 'That was too many files to keep';
+  const alive = await Promise.all(item.paths.map(exists));
+  const live = item.paths.filter((_, k) => alive[k]);
+  if (!live.length) return item.paths.length > 1 ? 'Those files moved or were deleted' : 'That file moved or was deleted';
+  const prev = lastSig;
+  lastSig = 'f:' + live.join('|').toLowerCase();
+  if (await setFiles(live, item.effect)) { filesOnClip = true; return true; }
+  lastSig = prev;
+  return 'Could not put the files on the clipboard';
+}
+function notice(text) { notch?.webContents.send('notice', text); }
 
 async function readClip() {
   const [entry] = await clipboard.read();
@@ -174,9 +271,13 @@ function addItem(clip) {
   if (item) {
     history = history.filter(h => h !== item);
     item.ts = Date.now();
+    if (clip.kind === 'files') item.effect = clip.effect;
   } else {
     item = { id: crypto.randomUUID(), sig: clip.sig, kind: clip.kind, ts: Date.now() };
-    if (clip.kind === 'image') {
+    if (clip.kind === 'files') {
+      Object.assign(item, { paths: clip.paths, total: clip.total, effect: clip.effect }, fileInfo(clip.paths, clip.total));
+      probeFiles(item);
+    } else if (clip.kind === 'image') {
       const { width, height } = clip.img.getSize();
       item.w = width; item.h = height;
       const small = width > 320 ? clip.img.resize({ width: 320, quality: 'best' }) : clip.img;
@@ -205,25 +306,37 @@ function addItem(clip) {
   });
 }
 
-let polling = false;
-async function pollClipboard() {
-  if (polling) return;
-  polling = true;
+// with the helper watching, the clipboard is only read when it actually changed (plus a slow safety net)
+let clipBusy = false, clipDirty = true, lastRead = 0, helperClips = false, filesOnClip = false;
+async function pollClipboard(force = false) {
+  if (clipBusy) { clipDirty = true; return; }
+  if (!force && helperClips && !clipDirty && Date.now() - lastRead < 3000) return;
+  clipDirty = false;
+  if (filesOnClip) return;
+  clipBusy = true; lastRead = Date.now();
   try {
     const clip = await readClip();
     if (clip && clip.sig !== lastSig) { lastSig = clip.sig; addItem(clip); }
-  } catch {} finally { polling = false; }
+  } catch { clipDirty = true; } finally { clipBusy = false; }
 }
 
 async function writeItem(item, promote = true) {
-  polling = true;
+  for (let i = 0; clipBusy && i < 100; i++) await new Promise(r => setTimeout(r, 20));
+  if (clipBusy) return false;
+  clipBusy = true;
   try {
-    if (item.kind === 'image') {
-      const png = fs.readFileSync(path.join(IMG_DIR, item.id + '.png'));
-      await clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]);
-    } else await clipboard.writeText(item.text);
-    lastSig = (await readClip())?.sig ?? lastSig;
-  } catch { return false; } finally { polling = false; }
+    if (item.kind === 'files') {
+      const r = await writeFiles(item);
+      if (r !== true) { notice(r); return false; }
+    } else {
+      if (item.kind === 'image') {
+        const png = fs.readFileSync(path.join(IMG_DIR, item.id + '.png'));
+        await clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]);
+      } else await clipboard.writeText(item.text);
+      lastSig = (await readClip())?.sig ?? lastSig;
+      filesOnClip = false;
+    }
+  } catch { return false; } finally { clipBusy = false; }
   currentId = item.id;
   if (promote) {
     history = [item, ...history.filter(h => h !== item)];
@@ -258,7 +371,8 @@ const hay = new WeakMap();
 function haystack(i) {
   let h = hay.get(i);
   if (!h) {
-    h = [i.text, i.kind, i.lang, i.of, i.src?.app, i.src?.site, i.src?.title, i.name, i.cname, i.hex, i.kind === 'image' ? `image ${i.w}x${i.h}` : ''].filter(Boolean).join('\n').toLowerCase();
+    h = [i.text, i.kind, i.lang, i.of, i.src?.app, i.src?.site, i.src?.title, i.name, i.cname, i.hex, i.kind === 'image' ? `image ${i.w}x${i.h}` : '',
+      i.kind === 'files' ? 'file ' + (i.paths || []).join('\n') : ''].filter(Boolean).join('\n').toLowerCase();
     hay.set(i, h);
   }
   return h;
