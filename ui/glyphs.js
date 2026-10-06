@@ -114,16 +114,22 @@
     return `--b:hsl(${h} 92% ${Math.round(53 - 7 * t)}%);--f:${h > 32 ? '#2b1d00' : '#fff'}`;
   }
 
+  // an app's own icon for its files (unity, blender, office...) beats ours; windows' stand-ins don't,
+  // and audio, archives, code and text keep their colour-coded looks
+  const OURS = new Set(['audio', 'archive', 'rar', 'sevenz', 'text', 'image', 'video']);
+  const nativeIcon = item => item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt="" draggable="false"></div>` : '';
+  const preferNative = item => !!item.ficon && !item.fsys && !OURS.has(TYPE_OF[item.ext]) && !EXT_CODE[item.ext];
+
   function fileTile(item) {
     const n = item.count || item.paths?.length || 1;
     const badge = n > 1 ? `<span class="g-count" style="${countTone(n)}">${n > 99 ? '99+' : n}</span>` : '';
     if (item.snip) return `<div class="g-anim"><i style="background-image:url('${item.snip}');--n:${item.snipN || 8}"></i></div>${badge}`;
     if (item.live || item.thumb) return `<img class="g-img${item.live ? ' live' : ''}" src="${item.live || item.thumb}" draggable="false" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">${badge}`;
     const ext = item.ext || '';
-    const ficon = item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : '';
+    const ficon = nativeIcon(item);
     const one = item.dir0 || (!ext && item.dir0 === undefined) ? folder
       : !ext ? ficon || doc('FILE')
-      : extGlyph(ext) || typeGlyph(ext) || ficon || doc(ext.toUpperCase().slice(0, 4), EXT_TINT[ext] || '#6b7280');
+      : preferNative(item) ? ficon : extGlyph(ext) || typeGlyph(ext) || ficon || doc(ext.toUpperCase().slice(0, 4), EXT_TINT[ext] || '#6b7280');
     return one + badge;
   }
 
@@ -148,7 +154,7 @@
       }
       case 'email': return envelope;
       case 'files': return fileTile(item);
-      case 'path': return item.ext ? extGlyph(item.ext) || typeGlyph(item.ext) || doc(item.ext.toUpperCase().slice(0, 4), EXT_TINT[item.ext] || '#6b7280') : folder;
+      case 'path': return item.ext ? (preferNative(item) && nativeIcon(item)) || extGlyph(item.ext) || typeGlyph(item.ext) || doc(item.ext.toUpperCase().slice(0, 4), EXT_TINT[item.ext] || '#6b7280') : folder;
       case 'code': return LANG_ICONS[item.lang] ? LANG_ICONS[item.lang](item) : `<div class="g-code">&lt;/&gt;</div>`;
       default: return doc();
     }

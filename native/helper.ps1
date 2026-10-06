@@ -8,7 +8,7 @@ $hash = -join ($md5.ComputeHash([IO.File]::ReadAllBytes($src)) | ForEach-Object 
 $hash = $hash.Substring(0, 10)
 $dll = Join-Path $env:TEMP "RougeHelper-$hash.dll"
 if (-not (Test-Path $dll)) {
-  Add-Type -Path $src -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, WindowsBase, System.Windows.Forms -OutputAssembly $dll -OutputType Library
+  Add-Type -Path $src -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, WindowsBase, System.Windows.Forms, System.Drawing -OutputAssembly $dll -OutputType Library
 }
 Add-Type -Path $dll
 [RougeHelper]::Run()

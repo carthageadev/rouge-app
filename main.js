@@ -44,11 +44,30 @@ const DETECTED = ['lang', 'of', 'url', 'email', 'ext', 'name', 'path', 'dir', 'l
 const thumbPath = id => path.join(THUMB_DIR, id + '.png');
 const APP_EXT = new Set(['exe', 'lnk', 'url', 'msi', 'ico', 'cpl', 'scr', 'appref-ms']);
 const THUMB_EXT = new Set('png jpg jpeg gif webp bmp tif tiff heic avif ico psd mp4 mov mkv avi webm wmv m4v pdf'.split(' '));
-const iconKey = i => i.kind !== 'files' || i.dir0 ? null : APP_EXT.has(i.ext) ? 'p:' + i.paths[0].toLowerCase() : 'e:' + (i.ext || '');
+const iconKey = i => i.kind === 'path' ? (i.ext && !APP_EXT.has(i.ext) ? 'e:' + i.ext : null)
+  : i.kind !== 'files' || i.dir0 ? null : APP_EXT.has(i.ext) ? 'p:' + i.paths[0].toLowerCase() : 'e:' + (i.ext || '');
+// windows' own icon for a type, and whether it's a stand-in from windows itself rather than an app's real icon
+const SYS_ICON = /^$|^%1$|^%systemroot%|\\windows\\|\\program files( \(x86\))?\\windows |shell32|imageres|wmploc/i;
+const iconWanted = new Set();
+function wantIcon(i) {
+  const key = iconKey(i);
+  if (!key || ficons[key] !== undefined || iconWanted.has(key) || !helper) return;
+  iconWanted.add(key);
+  const id = ++reqId;
+  pending.set(id, m => {
+    iconWanted.delete(key);
+    if (!m) return;
+    if (Object.keys(ficons).length > 400) for (const k of Object.keys(ficons)) if (k.startsWith('p:')) delete ficons[k];
+    ficons[key] = m.png ? { url: 'data:image/png;base64,' + m.png, sys: SYS_ICON.test((m.loc || '').trim()) && !key.startsWith('p:') } : null;
+    save(); broadcast();
+  });
+  hsend(key.startsWith('p:') ? `icon ${id} p ${i.paths[0]}` : `icon ${id} e .${key.slice(2)}`);
+  setTimeout(() => { if (pending.delete(id)) iconWanted.delete(key); }, 8000);
+}
 const pub = i => i && ({
   ...i, paths: i.paths && i.paths.slice(0, 50), info: undefined,
   thumb: i.kind === 'image' || i.thumbed ? pathToFileURL(thumbPath(i.id)).href : undefined,
-  ficon: i.kind === 'files' ? ficons[iconKey(i)] || null : undefined,
+  ficon: ficons[iconKey(i)]?.url || undefined, fsys: ficons[iconKey(i)]?.sys || undefined,
   live: i.live ? pathToFileURL(i.paths[0]).href : undefined,
   snip: i.snip ? pathToFileURL(snipPath(i.id)).href : undefined,
   snipN: i.snip || undefined,
@@ -77,6 +96,7 @@ function load() {
     history = d.history.filter(h => h && h.id && h.kind);
     icons = d.icons || {};
     ficons = d.ficons || {};
+    for (const k of Object.keys(ficons)) if (!ficons[k] || typeof ficons[k] !== 'object') delete ficons[k];
     xp = d.xp || 0;
     settings = { ...settings, ...(d.settings || {}) };
     pouch = (d.pouch || []).filter(id => byId(id));
@@ -211,6 +231,8 @@ function onHelper(line) {
   else if (m.type === 'click') onGlobalClick(m.x, m.y);
   else if (m.type === 'clip') onClip(m);
   else if (m.type === 'setfiles') { const r = pending.get(m.id); if (r) { pending.delete(m.id); r(!!m.ok); } }
+  else if (m.type === 'icon') { const r = pending.get(m.id); if (r) { pending.delete(m.id); r(m); } }
+  else if (m.type === 'ready') setTimeout(() => { for (const i of history.slice(0, RECENT)) wantIcon(i); }, 500);
   else if (m.type === 'error') clog('[helper]', m.msg);
 }
 function setFiles(paths, effect) {
@@ -268,16 +290,7 @@ async function probeFiles(item) {
     } else if (/^(webp|avif|bmp|png|jpe?g|jfif)$/.test(item.ext) && st[0].size < 25e6) item.live = true;
   }
   if (st[0] && !item.dir0 && !item.snip && VIDEO_EXT.has(item.ext)) videoSnippet(item);
-  const key = iconKey(item);
-  if (st[0] && key && !ficons[key]) {
-    try {
-      const ic = await app.getFileIcon(item.paths[0], { size: 'large' });
-      if (!ic.isEmpty()) {
-        if (Object.keys(ficons).length > 400) for (const k of Object.keys(ficons)) if (k.startsWith('p:')) delete ficons[k];
-        ficons[key] = ic.toDataURL();
-      }
-    } catch {}
-  }
+  if (st[0]) wantIcon(item);
   if (!byId(item.id)) { forget(item); return; }
   save();
   broadcast();
@@ -362,6 +375,7 @@ function addItem(clip, quiet = false) {
     } else {
       item.text = clip.text;
       classify(item);
+      if (item.kind === 'path') wantIcon(item);
     }
   }
   history.unshift(item);
@@ -898,7 +912,14 @@ function buildTray() {
 }
 
 ipcMain.on('copy', (_e, id) => { const it = byId(id); if (it) writeItem(it); });
-ipcMain.handle('files-of', (_e, id) => { const it = byId(id); return it?.kind === 'files' ? { paths: it.paths, info: it.info || [] } : null; });
+ipcMain.handle('files-of', (_e, id) => {
+  const it = byId(id);
+  if (it?.kind !== 'files') return null;
+  const exts = new Set(it.paths.map(p => ((/\.([a-z0-9]{1,20})$/i.exec(p) || [])[1] || '').toLowerCase()).filter(e => e && !APP_EXT.has(e)));
+  const icons = {};
+  for (const e of exts) { const f = ficons['e:' + e]; if (f) icons[e] = f; else wantIcon({ kind: 'path', ext: e }); }
+  return { paths: it.paths, info: it.info || [], icons };
+});
 ipcMain.on('copy-files', async (_e, { id, idx } = {}) => {
   const p = byId(id)?.kind === 'files' ? byId(id).paths[idx] : null;
   if (typeof p !== 'string') return;

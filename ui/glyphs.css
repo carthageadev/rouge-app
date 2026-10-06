@@ -3,7 +3,7 @@
 .g-img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; border-radius: inherit; }
 :has(> .g-img), :has(> .g-full), :has(> .g-link), :has(> .g-code), :has(> .g-color) { background: transparent !important; }
 .g-ficon { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; display: grid; place-items: center; background: #fff; }
-.g-ficon img { width: 74%; height: 74%; object-fit: contain; display: block; }
+.g-ficon img { width: 82%; height: 82%; object-fit: contain; display: block; }
 .g-count { position: absolute; top: -6px; right: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--b, #8b8f99); color: var(--f, #fff);
   font: 700 9px/15px "Segoe UI", system-ui; text-align: center; letter-spacing: -.2px; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .28), 0 2px 5px rgba(0, 0, 0, .25); z-index: 2; pointer-events: none; }
 .lang .li .g-count, .ar-ic .g-count, .mini-stack .g-count, .held .g-count { display: none; }

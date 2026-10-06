@@ -270,7 +270,7 @@ function subList(item) {
     const name = p.split(/[\\/]/).pop() || p, dir = p.slice(0, p.length - name.length).replace(/[\\/]+$/, '');
     const [isDir, size] = d.info[k] || [];
     const ext = isDir ? '' : ((/\.([a-z0-9]{1,20})$/i.exec(name) || [])[1] || '').toLowerCase();
-    return `<div class="si" data-gid="${item.id}" data-fi="${k}" title="${Rouge.esc(p)}  ·  click to copy just this one"><span class="sic">${Rouge.tile({ kind: 'files', ext, dir0: size === undefined ? undefined : !!isDir, count: 1 })}</span>`
+    return `<div class="si" data-gid="${item.id}" data-fi="${k}" title="${Rouge.esc(p)}  ·  click to copy just this one"><span class="sic">${Rouge.tile({ kind: 'files', ext, dir0: size === undefined ? undefined : !!isDir, count: 1, ficon: d.icons?.[ext]?.url, fsys: d.icons?.[ext]?.sys })}</span>`
       + `<span class="sn">${Rouge.esc(name)}</span>${dir !== item.dir ? `<span class="sd">${Rouge.esc(dir)}</span>` : ''}`
       + `<span class="ss">${isDir ? 'folder' : size >= 0 ? Rouge.fmtSize(size) : size === -1 ? 'missing' : ''}</span></div>`;
   }).join('');

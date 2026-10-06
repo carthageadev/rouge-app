@@ -34,6 +34,32 @@ public static class RougeHelper
     [DllImport("kernel32.dll")] static extern IntPtr GlobalLock(IntPtr h);
     [DllImport("kernel32.dll")] static extern bool GlobalUnlock(IntPtr h);
     [DllImport("kernel32.dll")] static extern UIntPtr GlobalSize(IntPtr h);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SHGetFileInfo(string path, uint attrs, ref SHFILEINFO info, uint size, uint flags);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern int SHDefExtractIcon(string location, int index, uint flags, out IntPtr large, out IntPtr small, uint size);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+    [DllImport("shell32.dll", EntryPoint = "#727")] static extern int SHGetImageList(int list, ref Guid iid, out IImageList ppv);
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] static extern int AssocQueryString(uint flags, uint str, string assoc, string extra, StringBuilder outStr, ref uint len);
+
+    [ComImport, Guid("46EB5926-582E-4017-9FDF-E8998DAA0950"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IImageList
+    {
+        [PreserveSig] int Add(IntPtr a, IntPtr b, ref int c);
+        [PreserveSig] int ReplaceIcon(int i, IntPtr h, ref int pi);
+        [PreserveSig] int SetOverlayImage(int a, int b);
+        [PreserveSig] int Replace(int i, IntPtr a, IntPtr b);
+        [PreserveSig] int AddMasked(IntPtr a, int c, ref int pi);
+        [PreserveSig] int Draw(IntPtr p);
+        [PreserveSig] int Remove(int i);
+        [PreserveSig] int GetIcon(int i, int flags, ref IntPtr icon);
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct SHFILEINFO
+    {
+        public IntPtr hIcon; public int iIcon; public uint attrs;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string name;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string type;
+    }
 
     [StructLayout(LayoutKind.Sequential)] public struct MSG { public IntPtr h; public uint m; public IntPtr w; public IntPtr l; public uint t; public int x; public int y; }
     [StructLayout(LayoutKind.Sequential)] struct MSLL { public int x; public int y; public uint data; public uint flags; public uint time; public IntPtr extra; }
@@ -283,6 +309,47 @@ public static class RougeHelper
         return ok;
     }
 
+    // the icon windows itself shows for a file type (or a specific file), as a png, plus where it came from
+    static IImageList bigIcons;
+    static string FileIcon(string id, bool byExt, string arg, int size)
+    {
+        string target = byExt ? "x" + arg : arg;
+        uint attrs = byExt ? 0x80u : 0u, useAttrs = byExt ? 0x10u : 0u;
+        var info = new SHFILEINFO();
+        string loc = "";
+        if (byExt)
+        {
+            var sb = new StringBuilder(1024);
+            uint len = 1024;
+            if (AssocQueryString(0, 15, arg, null, sb, ref len) == 0) loc = sb.ToString();
+        }
+        IntPtr h = IntPtr.Zero;
+        if (SHGetFileInfo(target, attrs, ref info, (uint)Marshal.SizeOf(info), 0x4000u | useAttrs) != IntPtr.Zero)
+        {
+            if (bigIcons == null) { var iid = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950"); SHGetImageList(2, ref iid, out bigIcons); }
+            if (bigIcons != null) bigIcons.GetIcon(info.iIcon, 1, ref h);
+        }
+        if (h == IntPtr.Zero)
+        {
+            info = new SHFILEINFO();
+            if (SHGetFileInfo(target, attrs, ref info, (uint)Marshal.SizeOf(info), 0x100u | useAttrs) != IntPtr.Zero) h = info.hIcon;
+        }
+        if (h == IntPtr.Zero) return "{\"type\":\"icon\",\"id\":" + id + ",\"png\":null}";
+        string png;
+        try
+        {
+            using (var ic = System.Drawing.Icon.FromHandle(h))
+            using (var bmp = ic.ToBitmap())
+            using (var ms = new System.IO.MemoryStream())
+            {
+                bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                png = Convert.ToBase64String(ms.ToArray());
+            }
+        }
+        finally { DestroyIcon(h); }
+        return "{\"type\":\"icon\",\"id\":" + id + ",\"png\":\"" + png + "\",\"loc\":\"" + Esc(loc) + "\"}";
+    }
+
     public static void Run()
     {
         StartHooks();
@@ -300,6 +367,12 @@ public static class RougeHelper
                     case "keys": KeysOn = parts.Length > 1 && parts[1] == "1"; break;
                     case "paste": Paste(); break;
                     case "activate": Activate(new IntPtr(long.Parse(parts[1]))); break;
+                    case "icon":
+                        {
+                            var p = line.TrimEnd('\r', '\n').Split(new[] { ' ' }, 4);
+                            if (p.Length == 4) Emit(FileIcon(long.Parse(p[1]).ToString(), p[2] == "e", p[3], 64));
+                            break;
+                        }
                     case "setfiles":
                         {
                             var p = line.TrimEnd('\r', '\n').Split(new[] { ' ' }, 4);
