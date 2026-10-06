@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Rouge frames</title></head>
+<body>
+<script>
+  // grabs a short run of frames from inside a video (about a third of the way in) into one strip
+  const seek = (v, t) => new Promise((res, rej) => {
+    const done = () => { v.removeEventListener('seeked', done); clearTimeout(timer); res(); };
+    const timer = setTimeout(() => { v.removeEventListener('seeked', done); rej(new Error('seek')); }, 4000);
+    v.addEventListener('seeked', done);
+    v.currentTime = t;
+  });
+
+  window.grab = async (url, n = 8, fw = 128) => {
+    const v = document.createElement('video');
+    v.muted = true; v.preload = 'auto'; v.src = url;
+    try {
+      await new Promise((res, rej) => {
+        v.onloadeddata = res;
+        v.onerror = () => rej(new Error('decode'));
+        setTimeout(() => rej(new Error('load')), 6000);
+      });
+      if (v.duration === Infinity) { await seek(v, 1e9).catch(() => {}); }
+      const dur = v.duration, W = v.videoWidth, H = v.videoHeight;
+      if (!isFinite(dur) || dur <= 0 || !W || !H) return null;
+      const step = Math.min(0.3, dur / (n + 1));
+      const start = Math.max(0, Math.min(dur * 0.3, dur - step * n - 0.05));
+      const fh = Math.round(fw * 0.75);
+      let cw = W, ch = W * 0.75;
+      if (ch > H) { ch = H; cw = H / 0.75; }
+      const c = document.createElement('canvas');
+      c.width = fw * n; c.height = fh;
+      const g = c.getContext('2d');
+      for (let i = 0; i < n; i++) {
+        await seek(v, start + i * step);
+        g.drawImage(v, (W - cw) / 2, (H - ch) / 2, cw, ch, i * fw, 0, fw, fh);
+      }
+      return { data: c.toDataURL('image/jpeg', 0.82), n, dur };
+    } finally {
+      v.removeAttribute('src');
+      v.load();
+    }
+  };
+</script>
+</body>
+</html>

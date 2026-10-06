@@ -108,7 +108,8 @@
   function fileTile(item) {
     const n = item.count || item.paths?.length || 1;
     const badge = n > 1 ? `<span class="g-count" style="${countTone(n)}">${n > 99 ? '99+' : n}</span>` : '';
-    if (item.thumb) return `<img class="g-img" src="${item.thumb}" draggable="false" alt="">${badge}`;
+    if (item.snip) return `<div class="g-anim"><i style="background-image:url('${item.snip}');--n:${item.snipN || 8}"></i></div>${badge}`;
+    if (item.live || item.thumb) return `<img class="g-img${item.live ? ' live' : ''}" src="${item.live || item.thumb}" draggable="false" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">${badge}`;
     const ext = item.ext || '';
     const ficon = item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : '';
     const one = item.dir0 || (!ext && item.dir0 === undefined) ? folder
@@ -183,7 +184,8 @@
       return cut + (parts.join(' · ') || n + ' items');
     }
     if (item.dir0) return cut + 'Folder';
-    return cut + (item.size !== undefined && item.nf ? fmtSize(item.size) : 'File');
+    const dur = item.dur ? ` · ${Math.floor(item.dur / 60)}:${String(Math.round(item.dur % 60)).padStart(2, '0')}` : '';
+    return cut + (item.size !== undefined && item.nf ? fmtSize(item.size) : 'File') + dur;
   }
 
   function preview(item, n = 60) {

@@ -28,3 +28,9 @@
 .tk-f { color: var(--tk-f); font-style: normal; }
 .tk-t { color: var(--tk-t); font-style: normal; }
 .tk-p { color: var(--tk-p); font-style: normal; }
+
+.g-img.live { object-fit: contain; background: repeating-conic-gradient(#ececf0 0 25%, #fff 0 50%) 0 0 / 8px 8px; }
+.g-anim { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; container-type: size; background: #111; }
+.g-anim i { position: absolute; left: 50%; top: 50%; width: max(100cqw, 133.34cqh); height: max(100cqh, 75cqw); transform: translate(-50%, -50%);
+  background-size: 800% 100%; background-repeat: no-repeat; animation: g-anim 2.4s steps(8, jump-none) infinite; }
+@keyframes g-anim { to { background-position: 100% 0; } }

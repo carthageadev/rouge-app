@@ -48,6 +48,9 @@ const pub = i => i && ({
   ...i, paths: i.paths && i.paths.slice(0, 50), info: undefined,
   thumb: i.kind === 'image' || i.thumbed ? pathToFileURL(thumbPath(i.id)).href : undefined,
   ficon: i.kind === 'files' ? ficons[iconKey(i)] || null : undefined,
+  live: i.live ? pathToFileURL(i.paths[0]).href : undefined,
+  snip: i.snip ? pathToFileURL(snipPath(i.id)).href : undefined,
+  snipN: i.snip || undefined,
 });
 const withIcon = i => i && ({ ...pub(i), icon: icons[i.src?.exe] || null });
 const kindGroup = i => i.kind === 'email' ? 'link' : i.kind;
@@ -128,6 +131,36 @@ function level() {
 function forget(item) {
   if (item.kind === 'image') fs.unlink(path.join(IMG_DIR, item.id + '.png'), () => {});
   if (item.kind === 'image' || item.thumbed) fs.unlink(thumbPath(item.id), () => {});
+  if (item.snip) fs.unlink(snipPath(item.id), () => {});
+}
+
+// a hidden page decodes a few frames from inside a video into a tiny looping strip
+const VIDEO_EXT = new Set('mp4 mov m4v webm mkv ogv'.split(' '));
+const snipPath = id => path.join(THUMB_DIR, id + '-v.jpg');
+let grabWin = null, grabQueue = Promise.resolve(), grabIdleT = null;
+function grabber() {
+  if (!grabWin || grabWin.isDestroyed()) {
+    grabWin = new BrowserWindow({ show: false, width: 320, height: 240, skipTaskbar: true, webPreferences: { backgroundThrottling: false } });
+    grabWin.loadFile(path.join(__dirname, 'ui', 'grab.html'));
+  }
+  clearTimeout(grabIdleT);
+  grabIdleT = setTimeout(() => { grabWin?.destroy(); grabWin = null; }, 30000);
+  return grabWin;
+}
+function videoSnippet(item) {
+  grabQueue = grabQueue.then(async () => {
+    if (!byId(item.id)) return;
+    const w = grabber();
+    try {
+      if (w.webContents.isLoading()) await new Promise(r => w.webContents.once('did-finish-load', r));
+      const job = w.webContents.executeJavaScript(`grab(${JSON.stringify(pathToFileURL(item.paths[0]).href)})`);
+      const r = await Promise.race([job, new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 15000))]);
+      if (!r || !r.data || !byId(item.id)) return;
+      await fs.promises.writeFile(snipPath(item.id), Buffer.from(r.data.split(',')[1], 'base64'));
+      item.snip = r.n; item.dur = r.dur;
+      save(); broadcast();
+    } catch (e) { if (e.message === 'slow') { w.destroy(); grabWin = null; } }
+  });
 }
 
 let helper = null, helperBuf = '', reqId = 0;
@@ -220,7 +253,9 @@ async function probeFiles(item) {
   for (const s of st) if (s) { if (s.isDirectory()) nd++; else { nf++; size += s.size; } }
   Object.assign(item, { nd, nf, size, dir0: !!st[0]?.isDirectory() });
   if (item.paths.length > 1) item.info = st.map(s => s ? [s.isDirectory() ? 1 : 0, s.isDirectory() ? 0 : s.size] : [0, -1]);
-  if (st[0] && !item.dir0 && !item.thumbed && THUMB_EXT.has(item.ext)) {
+  const LIVE = { svg: 5e6, gif: 8e6 };
+  if (st[0] && !item.dir0 && LIVE[item.ext] && st[0].size < LIVE[item.ext]) item.live = true;
+  else if (st[0] && !item.dir0 && !item.thumbed && THUMB_EXT.has(item.ext)) {
     let img = null;
     try { img = await nativeImage.createThumbnailFromPath(item.paths[0], { width: 320, height: 320 }); } catch {}
     if ((!img || img.isEmpty()) && /^(png|jpe?g|gif|bmp|ico)$/.test(item.ext) && st[0].size < 40e6) {
@@ -229,8 +264,9 @@ async function probeFiles(item) {
     }
     if (img && !img.isEmpty()) {
       try { await fs.promises.writeFile(thumbPath(item.id), img.toPNG()); item.thumbed = true; } catch {}
-    }
+    } else if (/^(webp|avif|bmp|png|jpe?g|jfif)$/.test(item.ext) && st[0].size < 25e6) item.live = true;
   }
+  if (st[0] && !item.dir0 && !item.snip && VIDEO_EXT.has(item.ext)) videoSnippet(item);
   const key = iconKey(item);
   if (st[0] && key && !ficons[key]) {
     try {

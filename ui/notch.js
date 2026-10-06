@@ -196,7 +196,7 @@ function card(item, i) {
   const meta = label => `<div class="meta">${item.kind === 'files' ? `<span class="fl${item.effect === 'move' ? ' cut' : ''}">${Rouge.esc(label)}</span>` : srcLabel(item, label)}<span class="tm">${pouchDot(item)}${ago(item.ts)}</span></div>`;
   const done = `<div class="done">Copied</div>`;
   const cv = item.id === data.current ? `<div class="cv" title="This is what Ctrl V pastes">CTRL V</div>` : '';
-  const cls = `card c-${item.kind === 'image' || (item.kind === 'files' && item.thumb) ? 'img' : item.kind}${item.kind === 'files' ? ' c-files' : ''}${item.id === freshId ? ' fresh' : ''}`;
+  const cls = `card c-${item.kind === 'image' || (item.kind === 'files' && (item.thumb || item.live || item.snip)) ? 'img' : item.kind}${item.kind === 'files' ? ' c-files' : ''}${item.id === freshId ? ' fresh' : ''}`;
   const head = `<div class="${cls}" data-id="${item.id}" style="--i:${i}" title="${Rouge.esc(item.src?.title || '')}">${cv}`;
   const t = item.text ?? '';
   switch (item.kind) {
@@ -226,7 +226,7 @@ function card(item, i) {
     case 'files': {
       if (expanded.has(item.id)) return groupPanel(item, i);
       const more = item.count > 1 ? xpBtn(item, true) : '';
-      if (item.thumb) return `${head}<img src="${item.thumb}" draggable="false" alt="">${item.count > 1 ? `<span class="fcount">+${item.count - 1}</span>` : ''}<div class="fname">${Rouge.esc(item.name || '')}</div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
+      if (item.thumb || item.live || item.snip) return `${head}${item.snip || item.live ? `<div class="cbg">${Rouge.tile({ ...item, count: 1 })}</div>` : `<img src="${item.thumb}" draggable="false" alt="">`}${item.count > 1 ? `<span class="fcount">+${item.count - 1}</span>` : ''}<div class="fname">${Rouge.esc(item.name || '')}</div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
       return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || '')}</div><div class="path">${more}${Rouge.esc(item.dir || '')}</div></div>${meta(Rouge.filesLabel(item))}${xBtn(item)}${done}</div>`;
     }
     case 'code':
