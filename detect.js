@@ -1,3 +1,5 @@
+const { describe: describeColor } = require('./colors');
+
 const TLDS = new Set(('com net org io dev app ai co me gg xyz edu gov mil int info biz tv fm ly to so cc ws la vc gl re ' +
   'uk us ca de fr it es nl be ch at se no dk fi pl pt br mx ar cl pe jp kr cn tw hk in sg au nz za ru ua tr ir il ae sa eg ma tn dz ng ke ' +
   'tech site online store shop blog page link live news cloud space design art studio games game wiki one top club xyz email chat run ' +
@@ -162,7 +164,8 @@ function asPath(t) {
 function detect(text) {
   const t = text.trim();
   if (!t) return { kind: 'text' };
-  if (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(t) || /^(rgb|hsl|hwb|oklch|oklab|lab|lch)a?\([^)]*\)$/i.test(t)) return { kind: 'color' };
+  const color = describeColor(t);
+  if (color) return { kind: 'color', ...color };
   const single = !t.includes('\n');
   if (single) {
     const email = asEmail(t);

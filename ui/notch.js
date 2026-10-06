@@ -202,8 +202,13 @@ function card(item, i) {
     case 'image':
       return `${head}<img src="${item.thumb}" draggable="false" alt="">${meta(item.w + '×' + item.h)}${xBtn(item)}${done}</div>`;
     case 'color': {
-      const light = luminance(t.trim()) > .6;
-      return `${head}<div class="sw" style="background:${Rouge.esc(t.trim())}"></div><div class="hex" style="color:${light ? 'rgba(0,0,0,.75)' : 'rgba(255,255,255,.92)'}">${Rouge.esc(t.trim())}</div>${xBtn(item)}${done}</div>`;
+      const hex = item.hex || t.trim(), a = item.alpha ?? 1;
+      const light = luminance(hex) * a + .93 * (1 - a) > .6;
+      const alts = Rouge.colorAlts(item).map(x => `<b data-alt="${Rouge.esc(x.v)}" title="Copy ${Rouge.esc(x.v)}">${x.k}</b>`).join('');
+      const orig = item.cfmt && item.cfmt !== 'HEX' && item.cfmt !== 'NAME' ? `<div class="orig">${Rouge.esc(t.trim())}</div>` : '';
+      return `${head}<div class="sw" style="--c:${Rouge.esc(hex)}"></div><div class="alts">${alts}</div>`
+        + `<div class="cinfo" style="color:${light ? 'rgba(0,0,0,.78)' : 'rgba(255,255,255,.94)'}"><div class="cn">${Rouge.esc(item.cname || '')}</div>`
+        + `<div class="hex">${Rouge.esc(hex.toUpperCase())}${a < 1 ? `<span>${Math.round(a * 100)}%</span>` : ''}</div>${orig}</div>${xBtn(item)}${done}</div>`;
     }
     case 'link': {
       let u; try { u = new URL(item.url || t.trim()); } catch {}
@@ -229,7 +234,7 @@ function row(item, i) {
   const t = item.text ?? '';
   let body;
   if (item.kind === 'image') body = `Image · ${item.w}×${item.h}`;
-  else if (item.kind === 'color') body = `<span class="swd" style="background:${Rouge.esc(t.trim())}"></span>${Rouge.esc(t.trim())}`;
+  else if (item.kind === 'color') body = `<span class="swd" style="background:${Rouge.esc(item.hex || t.trim())}"></span>${item.cname ? `<b class="cnm">${Rouge.esc(item.cname)}</b>` : ''}${Rouge.esc(t.trim())}${item.hex && item.cfmt !== 'HEX' ? ` <span class="dimx">${Rouge.esc(item.hex.toUpperCase())}</span>` : ''}`;
   else if (item.kind === 'code') body = `<div class="code">${codeBody(item, 1200)}</div>`;
   else body = Rouge.esc(t.slice(0, 1200));
   const name = Rouge.srcName(item);
@@ -454,6 +459,8 @@ function onListClick(e) {
   if (out) { rouge.send('unpouch', out.dataset.out); return; }
   const x = e.target.closest('[data-x]');
   if (x) { rouge.send('remove', x.dataset.x); return; }
+  const alt = e.target.closest('[data-alt]');
+  if (alt) { rouge.send('copy-text', alt.dataset.alt); flash(alt.closest('[data-id]')?.dataset.id); return; }
   const c = e.target.closest('.card, .row, .ar');
   if (!c) return;
   rouge.send('copy', c.dataset.id);

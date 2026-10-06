@@ -63,7 +63,7 @@
   function tile(item) {
     switch (item.kind) {
       case 'image': return item.thumb ? `<img class="g-img" src="${item.thumb}" draggable="false" alt="">` : doc('IMG', '#e5528a');
-      case 'color': return `<div class="g-color" style="background:${esc((item.text || '').trim())}"></div>`;
+      case 'color': return `<div class="g-color" style="--c:${esc(item.hex || (item.text || '').trim())}"></div>`;
       case 'link': {
         const d = domain(item.url || (item.text || '').trim()), h = hue(d);
         return `<div class="g-link" style="--h:${h}">${esc(d.charAt(0).toUpperCase())}${favicon(d)}</div>`;
@@ -73,6 +73,23 @@
       case 'code': return LANG_ICONS[item.lang] ? LANG_ICONS[item.lang]() : `<div class="g-code">&lt;/&gt;</div>`;
       default: return doc();
     }
+  }
+
+  function colorAlts(item) {
+    const h = item.hex;
+    if (!h) return [];
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), a = item.alpha ?? 1, al = +a.toFixed(2);
+    const R = r / 255, G = g / 255, B = b / 255, mx = Math.max(R, G, B), mn = Math.min(R, G, B), l = (mx + mn) / 2, d = mx - mn;
+    const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+    const hue = !d ? 0 : mx === R ? 60 * (((G - B) / d) % 6) : mx === G ? 60 * ((B - R) / d + 2) : 60 * ((R - G) / d + 4);
+    const H = Math.round((hue + 360) % 360), S = Math.round(s * 100), L = Math.round(l * 100);
+    const f = v => v.toFixed(3);
+    return [
+      { k: 'HEX', v: h },
+      { k: 'RGB', v: a < 1 ? `rgba(${r}, ${g}, ${b}, ${al})` : `rgb(${r}, ${g}, ${b})` },
+      { k: 'HSL', v: a < 1 ? `hsla(${H}, ${S}%, ${L}%, ${al})` : `hsl(${H}, ${S}%, ${L}%)` },
+      { k: '0–1', v: `${f(R)}, ${f(G)}, ${f(B)}${a < 1 ? ', ' + f(a) : ''}`, fmt: 'FLOAT' },
+    ].filter(x => (x.fmt || x.k) !== item.cfmt).slice(0, 3);
   }
 
   function srcIcon(item, cls = 'src-ic') {
@@ -148,5 +165,5 @@
     return out + esc(code.slice(last));
   }
 
-  window.Rouge = { tile, favOn, esc, domain, hue, srcIcon, srcName, srcKey, preview, langName, highlight, LANG_NAMES };
+  window.Rouge = { tile, favOn, colorAlts, esc, domain, hue, srcIcon, srcName, srcKey, preview, langName, highlight, LANG_NAMES };
 })();

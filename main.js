@@ -37,7 +37,7 @@ let overlayDisplay = null, quitting = false;
 
 const byId = id => history.find(h => h.id === id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const DETECTED = ['lang', 'of', 'url', 'email', 'ext', 'name', 'path', 'dir', 'line', 'count', 'paths'];
+const DETECTED = ['lang', 'of', 'url', 'email', 'ext', 'name', 'path', 'dir', 'line', 'count', 'paths', 'hex', 'alpha', 'cname', 'cexact', 'cfmt'];
 const thumbPath = id => path.join(THUMB_DIR, id + '.png');
 const pub = i => i && ({ ...i, thumb: i.kind === 'image' ? pathToFileURL(thumbPath(i.id)).href : undefined });
 const withIcon = i => i && ({ ...pub(i), icon: icons[i.src?.exe] || null });
@@ -258,7 +258,7 @@ const hay = new WeakMap();
 function haystack(i) {
   let h = hay.get(i);
   if (!h) {
-    h = [i.text, i.kind, i.lang, i.of, i.src?.app, i.src?.site, i.src?.title, i.name, i.kind === 'image' ? `image ${i.w}x${i.h}` : ''].filter(Boolean).join('\n').toLowerCase();
+    h = [i.text, i.kind, i.lang, i.of, i.src?.app, i.src?.site, i.src?.title, i.name, i.cname, i.hex, i.kind === 'image' ? `image ${i.w}x${i.h}` : ''].filter(Boolean).join('\n').toLowerCase();
     hay.set(i, h);
   }
   return h;
@@ -616,6 +616,7 @@ function buildTray() {
 }
 
 ipcMain.on('copy', (_e, id) => { const it = byId(id); if (it) writeItem(it); });
+ipcMain.on('copy-text', (_e, text) => { if (typeof text === 'string' && text.trim() && text.length <= 200) clipboard.writeText(text); });
 ipcMain.on('menu-pick', (_e, id) => pasteItem(byId(id)));
 ipcMain.on('menu-height', (_e, h) => {
   if (!menu) return;
