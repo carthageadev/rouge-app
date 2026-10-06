@@ -10,6 +10,8 @@
     skirt: ['Part132'],
     sleeveL: ['ArtMesh403_Skinning', 'ArtMesh404_Skinning', 'ArtMesh405_Skinning', 'ArtMesh406_Skinning'],
     sleeveR: ['ArtMesh399_Skinning', 'ArtMesh400_Skinning', 'ArtMesh401_Skinning', 'ArtMesh402_Skinning2', 'ArtMesh402_Skinning'],
+    legs: ['Part134'],
+    neck: ['Part126'],
   };
   const FRAMES = [{ Param28: 1, Param29: 0, Param33: 0 }, { Param28: 0, Param29: 1, Param33: 0 }, { Param28: 0, Param29: 0, Param33: 1 }];
 
@@ -37,12 +39,12 @@
     ctx.closePath();
   }
 
-  function mapTri(ctx, src, sTri, dTri, op = 'source-over') {
+  function mapTri(ctx, src, sTri, dTri, op = 'source-over', grow = 0.9) {
     const m = affine(sTri, dTri);
     if (!m) return;
     ctx.save();
     ctx.beginPath();
-    triPath(ctx, dTri, 0.9);
+    triPath(ctx, dTri, grow);
     ctx.clip();
     ctx.globalCompositeOperation = op;
     ctx.setTransform(...m);
@@ -50,33 +52,17 @@
     ctx.restore();
   }
 
-  function shiftStack(src, r, op) {
-    const out = canvas(src.width, src.height), x = out.getContext('2d');
-    x.drawImage(src, 0, 0);
-    x.globalCompositeOperation = op;
-    for (let k = 0; k < 12; k++) {
-      const a = k / 12 * Math.PI * 2;
-      x.drawImage(src, Math.cos(a) * r, Math.sin(a) * r);
-    }
-    return out;
-  }
-  function band(mask, r) {
-    const out = shiftStack(mask, r, 'source-over'), x = out.getContext('2d');
-    x.globalCompositeOperation = 'destination-out';
-    x.drawImage(shiftStack(mask, r, 'destination-in'), 0, 0);
-    return out;
-  }
-
   const svgImage = markup => new Promise((res, rej) => {
     const img = new Image();
     img.onload = () => res(img); img.onerror = rej;
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup);
   });
-  const doc = (inner, defs = '') => `<svg xmlns="http://www.w3.org/2000/svg" width="${DW}" height="${DH}" viewBox="0 0 ${DW} ${DH}"><defs>${defs}</defs>${inner}</svg>`;
+  const KH = 1600;
+  const doc = (inner, defs = '', h = DH) => `<svg xmlns="http://www.w3.org/2000/svg" width="${DW}" height="${h}" viewBox="0 0 ${DW} ${h}"><defs>${defs}</defs>${inner}</svg>`;
   const wobble = seed => `<filter id="w" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="${seed}"/><feDisplacementMap in="SourceGraphic" scale="3.2" xChannelSelector="R" yChannelSelector="G"/></filter>`;
 
-  async function render(markup) {
-    const c = canvas(DW, DH);
+  async function render(markup, h = DH) {
+    const c = canvas(DW, h);
     if (markup) c.getContext('2d').drawImage(await svgImage(markup), 0, 0);
     return c;
   }
@@ -204,29 +190,57 @@
     }
 
     let busy = Promise.resolve();
+    const FRONT = ['rib', 'placket', 'collar', 'collarBack'];
+    function clearTris(ctx, tris) {
+      ctx.save();
+      ctx.beginPath();
+      for (const tri of tris) triPath(ctx, tri.tex, 2.6);
+      ctx.clip();
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.restore();
+    }
+    function keepOriginal(d, tris, keepImg) {
+      const t = texIdx[d], ctx = work[t].getContext('2d');
+      ctx.save();
+      ctx.beginPath();
+      for (const tri of tris) triPath(ctx, tri.tex, 2.2);
+      ctx.clip();
+      ctx.drawImage(orig[t], 0, 0);
+      ctx.restore();
+      for (const tri of tris) mapTri(ctx, keepImg, tri.des, tri.tex, 'destination-in', 2.6);
+    }
+
     async function apply(design, style = {}) {
       const { geo, pieces } = snapshot(style);
       for (const p of Object.values(pieces)) for (const d of p.all) restore(d, geo);
       if (design) {
         const defs = design.defs || '';
+        const cache = new Map();
+        const img = async (key, markup, h) => {
+          if (!markup) return null;
+          if (!cache.has(key)) cache.set(key, await render(markup, h));
+          return cache.get(key);
+        };
+        const jobs = [];
         for (const [k, p] of Object.entries(pieces)) {
-          const spec = design.pieces[k];
-          if (!spec) continue;
-          const fillImg = await render(spec.fill && doc(spec.fill, defs));
-          for (const d of p.fill) {
-            const ctx = work[texIdx[d]].getContext('2d');
-            for (const tri of geo[d]) mapTri(ctx, fillImg, tri.des, tri.tex, 'source-atop');
-          }
-          if (spec.keepLines) continue;
-          const keep = band(silhouette(p.fill, geo), spec.edge ?? 5);
-          if (spec.keep) keep.getContext('2d').drawImage(await render(doc(spec.keep, defs)), 0, 0);
-          const imgs = {};
-          for (const d of p.lines) {
-            const seed = p.seed(d) % 3;
-            if (spec.lines && !imgs[seed]) imgs[seed] = await render(doc(`<g filter="url(#w)">${spec.lines}</g>`, defs + wobble(seed * 7 + 3)));
-            const ctx = work[texIdx[d]].getContext('2d');
-            for (const tri of geo[d]) mapTri(ctx, keep, tri.des, tri.tex, 'destination-in');
-            if (imgs[seed]) for (const tri of geo[d]) mapTri(ctx, imgs[seed], tri.des, tri.tex);
+          if ((k === 'legs' || k === 'neck') && !design.pieces[k]) continue;
+          const spec = k in design.pieces ? design.pieces[k] : k === 'body' || FRONT.includes(k) ? design.pieces.torso : null;
+          const key = spec && spec === design.pieces.torso ? 'torso' : k;
+          jobs.push({ p, spec, key, fill: spec && await img(key + ':fill', spec.fill && doc(spec.fill, defs)), keep: spec && await img(key + ':keep', spec.keep && doc(spec.keep, defs, KH), KH) });
+        }
+        for (const j of jobs) for (const d of j.p.all) clearTris(work[texIdx[d]].getContext('2d'), geo[d]);
+        const touches = (d, keep) => {
+          const x = keep.getContext('2d'), data = x.getImageData(0, 0, keep.width, keep.height).data;
+          return geo[d].some(t => [0, 2, 4].some(i => { const px = Math.round(t.des[i]), py = Math.round(t.des[i + 1]); return px >= 0 && py >= 0 && px < keep.width && py < keep.height && data[(py * keep.width + px) * 4 + 3] > 0; }));
+        };
+        for (const j of jobs) if (j.keep) for (const d of j.p.all) if (touches(d, j.keep)) keepOriginal(d, geo[d], j.keep);
+        for (const j of jobs) {
+          if (!j.spec) continue;
+          for (const d of j.p.all) {
+            const isFill = j.p.fill.includes(d), seed = isFill ? -1 : j.p.seed(d) % 3;
+            const art = isFill ? j.fill
+              : await img(j.key + ':lines' + seed, j.spec.lines && doc(`<g filter="url(#w)">${j.spec.lines}</g>`, defs + wobble(seed * 7 + 3)));
+            if (art) for (const tri of geo[d]) mapTri(work[texIdx[d]].getContext('2d'), art, tri.des, tri.tex, 'source-over', 2.2);
           }
         }
       }
