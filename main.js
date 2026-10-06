@@ -762,7 +762,7 @@ function buildTray() {
     { label: 'Paste menu   Alt+V', click: openMenu },
     { type: 'separator' },
     { label: 'Clear history', click: clearAll },
-    { label: 'Quit Rouge', click: () => app.exit(0) },
+    { label: 'Quit Rouge', click: () => { quitting = true; flushNow(); helper?.kill(); app.exit(0); } },
   ]);
   tray.setContextMenu(menuTpl());
   buildTrayMenu = () => tray.setContextMenu(menuTpl());
