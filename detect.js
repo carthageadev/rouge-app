@@ -168,11 +168,11 @@ function onePath(raw) {
   const nix = !win && (quoted ? /^(~|\.{1,2})?\/[^/]+(\/[^/]*)+$/.test(t) : /^(~|\.{1,2})?\/[^\s/]+(\/[^\s/]*)+$/.test(t) || /^~\/\S*$/.test(t));
   if (!win && !nix) return null;
   if (win && /[<>"|?*\t]/.test(t.slice(2))) return null;
-  const at = t.match(/\.[a-z0-9]{1,8}(:\d+(:\d+)?|\(\d+(,\d+)?\))$/i);
+  const at = t.match(/\.[a-z0-9]{1,20}(:\d+(:\d+)?|\(\d+(,\d+)?\))$/i);
   const p = at ? t.slice(0, t.length - at[1].length) : t;
   const bare = /^[a-z]:[\\/]?$/i.test(p) ? p.slice(0, 2) : p.replace(/[\\/]+$/, '');
   const name = bare.split(/[\\/]/).pop() || bare;
-  const ext = bare.length > 2 ? (name.match(/\.([a-z0-9]{1,8})$/i) || [])[1] : '';
+  const ext = bare.length > 2 ? (name.match(/\.([a-z0-9]{1,20})$/i) || [])[1] : '';
   const out = { path: p, name, dir: bare.slice(0, bare.length - name.length).replace(/[\\/]+$/, ''), ext: ext ? ext.toLowerCase() : '' };
   if (at) out.line = at[1].replace(/[^\d,:]/g, '').replace(/^:/, '').replace(',', ':');
   return out;

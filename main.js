@@ -85,9 +85,14 @@ function load() {
       delete item.thumb;
       migrated = true;
     }
+    if (item.kind === 'files' && Array.isArray(item.paths) && item.paths.length) Object.assign(item, fileInfo(item.paths, item.total || item.paths.length));
     classify(item);
   }
   if (migrated) save();
+  // older file clips may predate their icon or preview, fill those in quietly
+  setTimeout(() => {
+    for (const i of history.slice(0, RECENT)) if (i.kind === 'files' && (!ficons[iconKey(i)] || i.nd === undefined)) probeFiles(i);
+  }, 3000);
 }
 // write to a temp file and swap it in, so a crash mid-save never leaves a broken history
 let saveT, writing = false, again = false;
@@ -205,7 +210,7 @@ function onClip(m) {
 
 function fileInfo(paths, total) {
   const p0 = paths[0], name = path.win32.basename(p0) || p0;
-  const ext = (name.match(/\.([a-z0-9]{1,10})$/i) || [])[1];
+  const ext = (name.match(/\.([a-z0-9]{1,20})$/i) || [])[1];
   return { name, dir: path.win32.dirname(p0) === p0 ? '' : path.win32.dirname(p0), ext: ext ? ext.toLowerCase() : '', count: total };
 }
 
@@ -214,7 +219,7 @@ async function probeFiles(item) {
   let nd = 0, nf = 0, size = 0;
   for (const s of st) if (s) { if (s.isDirectory()) nd++; else { nf++; size += s.size; } }
   Object.assign(item, { nd, nf, size, dir0: !!st[0]?.isDirectory() });
-  if (st[0] && !item.dir0 && THUMB_EXT.has(item.ext)) {
+  if (st[0] && !item.dir0 && !item.thumbed && THUMB_EXT.has(item.ext)) {
     let img = null;
     try { img = await nativeImage.createThumbnailFromPath(item.paths[0], { width: 320, height: 320 }); } catch {}
     if ((!img || img.isEmpty()) && /^(png|jpe?g|gif|bmp|ico)$/.test(item.ext) && st[0].size < 40e6) {

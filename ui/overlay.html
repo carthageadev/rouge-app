@@ -63,9 +63,10 @@
   function body(item) {
     const el = document.createElement('div');
     el.className = 'tile';
-    el.innerHTML = `<div class="face">${Rouge.tile(item)}</div>`;
+    const html = Rouge.tile(item);
+    el.innerHTML = `<div class="face">${html}</div>`;
     document.body.appendChild(el);
-    return { id: item.id, el, x: cur.x + OFFSET.x, y: cur.y + OFFSET.y, vx: 0, vy: 0, rot: 0, s: 0, vs: 0, o: 1, mode: 'trail', t0: 0 };
+    return { id: item.id, el, html, x: cur.x + OFFSET.x, y: cur.y + OFFSET.y, vx: 0, vy: 0, rot: 0, s: 0, vs: 0, o: 1, mode: 'trail', t0: 0 };
   }
 
   function ripple(x, y) {
@@ -100,7 +101,11 @@
     }
     list.forEach((item, i) => {
       const it = items.get(item.id);
-      if (it && it.mode === 'trail') return;
+      if (it && it.mode === 'trail') {
+        const html = Rouge.tile(item);
+        if (html !== it.html) { it.el.firstChild.innerHTML = html; it.html = html; }
+        return;
+      }
       if (it) it.el.remove();
       items.set(item.id, body(item));
       if (i === 0) { ripple(cur.x + OFFSET.x, cur.y + OFFSET.y); lastMove = performance.now(); }
