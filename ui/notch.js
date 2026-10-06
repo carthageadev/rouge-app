@@ -407,6 +407,7 @@ grip.addEventListener('pointerdown', e => {
 const endDrag = () => { if (!document.body.classList.contains('dragging')) return; document.body.classList.remove('dragging'); rouge.send('drag-end'); };
 grip.addEventListener('pointerup', endDrag);
 grip.addEventListener('lostpointercapture', endDrag);
+grip.addEventListener('pointermove', e => { if (!e.buttons) endDrag(); });
 
 function resetView() {
   Object.assign(q, { kind: null, source: null, sourceItem: null, pouch: false, text: '' });
@@ -416,16 +417,31 @@ function resetView() {
 }
 
 rouge.on('settings', applySettings);
+// the grid is kept rendered while the notch is closed, so opening only replays the entrance animation
+let gridReady = false, closeT, idleT;
+function prerender() {
+  cancelIdleCallback(idleT);
+  idleT = requestIdleCallback(() => {
+    if (open || mode !== 'main' || !isDefault()) return;
+    shown = data.recent; total = data.stats.total;
+    renderGrid(false); renderChips();
+    gridReady = true;
+  }, { timeout: 1500 });
+}
 rouge.on('hover', v => {
   open = v;
   N.classList.toggle('open', v);
   syncFeed();
   renderPouch();
-  if (v) { refresh(true); mascot.resume?.(); }
-  else {
+  if (v) {
+    mascot.resume?.();
+    if (gridReady && mode === 'main' && isDefault()) replayGrid();
+    else requestAnimationFrame(() => requestAnimationFrame(() => { if (open) refresh(true); }));
+  } else {
     panel.classList.remove('set'); $('gear').classList.remove('on'); cust.classList.remove('on');
     $('search').blur();
-    setTimeout(() => { if (!open) { mascot.pause?.(); resetView(); renderPouch(); N.classList.remove('archive'); } }, 700);
+    clearTimeout(closeT);
+    closeT = setTimeout(() => { if (!open) { mascot.pause?.(); resetView(); renderPouch(); N.classList.remove('archive'); prerender(); } }, 700);
   }
 });
 rouge.on('search-blur', () => $('search').blur());
@@ -451,7 +467,7 @@ rouge.on('state', s => {
   if (q.pouch && !data.pouch.length) q.pouch = false;
   renderMini();
   renderPouch(s);
-  if (open) refresh(false); else renderChips();
+  if (open) refresh(false); else { renderChips(); gridReady = false; prerender(); }
 });
 
 function flash(id) {

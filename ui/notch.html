@@ -67,7 +67,8 @@
   body.float .grip { display: grid; }
   body.float .mini-right .blob { display: none; }
 
-  .panel { position: absolute; left: 0; right: 0; height: 510px; top: 0; padding: 16px 20px 18px; opacity: 0; transform: translateY(-8px) scale(.98);
+  .clip { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }
+  .panel { position: absolute; left: 50%; width: 520px; margin-left: -260px; height: 510px; top: 0; padding: 16px 20px 18px; opacity: 0; transform: translateY(-8px) scale(.98);
     filter: blur(6px); pointer-events: none; transition: opacity .18s var(--ease), transform .2s var(--ease), filter .18s; }
   body.float.up .panel { top: auto; bottom: 0; transform: translateY(8px) scale(.98); }
   #notch.open .panel { opacity: 1; transform: none; filter: none; pointer-events: auto;
@@ -185,6 +186,10 @@
     animation: rise .5s var(--spring) backwards; animation-delay: calc(var(--i) * 28ms + 120ms); }
   .grid.static .card, .grid.static .row, .grid.static .ghost-card, .grid.static .tip-row { animation: none; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.92); } }
+  @keyframes rise2 { from { opacity: 0; transform: translateY(14px) scale(.92); } }
+  .grid.alt .card, .grid.alt .ghost-card { animation-name: rise2; }
+  .grid.alt .row, .grid.alt .tip-row { animation-name: rise2; }
+  .grid .card:nth-child(n+17), .grid .ghost-card:nth-child(n+17), .grid .row:nth-child(n+11), .grid .tip-row:nth-child(n+11) { animation: none; }
   .card:hover { transform: translateY(-2px) scale(1.03); box-shadow: inset 0 0 0 1px var(--line-2), 0 10px 20px -8px var(--shadow); z-index: 2; }
   .card:active { transform: scale(.97); }
   .card.fresh { box-shadow: inset 0 0 0 1.5px var(--rouge); }
@@ -390,7 +395,7 @@
 </style>
 </head>
 <body>
-<div id="notch">
+<div id="notch"><div class="clip">
   <div class="mini">
     <div class="mini-stack" id="miniStack"></div>
     <div class="mini-right"><span id="miniCount"></span><div class="blob"></div>
@@ -488,7 +493,7 @@
       <div class="s-foot">Alt V paste menu · Alt + scroll to pick · Ctrl Shift X shake off</div>
     </div>
   </div>
-</div>
+</div></div>
 <script src="glyphs.js"></script>
 <script src="../vendor/live2dcubismcore.min.js"></script>
 <script src="../node_modules/pixi.js/dist/pixi.min.js"></script>
