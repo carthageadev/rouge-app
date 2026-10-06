@@ -197,7 +197,7 @@ function card(item, i) {
   const done = `<div class="done">Copied</div>`;
   const cv = item.id === data.current ? `<div class="cv" title="This is what Ctrl V pastes">CTRL V</div>` : '';
   const cls = `card c-${item.kind === 'image' || (item.kind === 'files' && (item.thumb || item.live || item.snip)) ? 'img' : item.kind}${item.kind === 'files' ? ' c-files' : ''}${item.id === freshId ? ' fresh' : ''}`;
-  const head = `<div class="${cls}" data-id="${item.id}" style="--i:${i}" title="${Rouge.esc(item.src?.title || '')}">${cv}`;
+  const head = `<div class="${cls}" data-id="${item.id}" draggable="true" style="--i:${i}" title="${Rouge.esc(item.src?.title || '')}">${cv}`;
   const t = item.text ?? '';
   switch (item.kind) {
     case 'image':
@@ -250,7 +250,7 @@ function row(item, i) {
   const kind = item.kind === 'code' ? `<span class="lk">${Rouge.esc(Rouge.langName(item))}</span><span>·</span>`
     : item.kind === 'files' ? `<span class="lk">${Rouge.esc(Rouge.filesLabel(item))}</span><span>·</span>` : '';
   const open = item.kind === 'files' && expanded.has(item.id);
-  const html = `<div class="row c-${item.kind}" data-id="${item.id}" style="--i:${Math.min(i, 14)}">
+  const html = `<div class="row c-${item.kind}" data-id="${item.id}" draggable="true" style="--i:${Math.min(i, 14)}">
     <div class="rf${item.kind === 'image' ? ' big' : ''}">${Rouge.tile(item)}</div>
     <div class="rb"><div class="rt">${body}</div>
       <div class="rm">${item.id === data.current ? '<span class="cvi">CTRL V</span>' : ''}${kind}${name ? srcLabel(item, '') : `<span>${item.kind}</span>`}${title}<span>·</span>${pouchDot(item)}<span>${ago(item.ts)}</span></div></div>
@@ -280,7 +280,7 @@ function subList(item) {
   return `<div class="sub"><div class="sub-list">${rows}${more}${lost}</div></div>`;
 }
 function groupPanel(item, i) {
-  return `<div class="gx" data-id="${item.id}" style="--i:${i}"><div class="gx-head"><div class="fav">${Rouge.tile(item)}</div>`
+  return `<div class="gx" data-id="${item.id}" draggable="true" style="--i:${i}"><div class="gx-head"><div class="fav">${Rouge.tile(item)}</div>`
     + `<div class="gx-t"><div class="dom">${Rouge.esc(item.name || '')}${xpBtn(item)}</div><div class="path">${Rouge.esc(Rouge.filesLabel(item))} · ${Rouge.esc(item.dir || '')}</div></div></div>`
     + `${subList(item)}${xBtn(item)}<div class="done">Copied</div></div>`;
 }
@@ -303,7 +303,7 @@ function archRow(item) {
   const txt = item.kind === 'image' ? `<span class="dim">Image · ${item.w}×${item.h}</span>`
     : item.kind === 'code' ? `<span class="lk">${Rouge.esc(Rouge.langName(item))}</span> ${Rouge.esc(Rouge.preview(item, 140))}`
     : Rouge.esc(Rouge.preview(item, 160));
-  return `<div class="ar" data-id="${item.id}"><div class="ar-ic">${Rouge.tile(item)}</div><div class="ar-tx">${txt}</div>`
+  return `<div class="ar" data-id="${item.id}" draggable="true"><div class="ar-ic">${Rouge.tile(item)}</div><div class="ar-tx">${txt}</div>`
     + `<div class="ar-src">${name ? srcLabel(item, '') : ''}</div><div class="ar-tm">${pouchDot(item)}${clock(item.ts)}</div>${xBtn(item)}<div class="done">Copied</div></div>`;
 }
 
@@ -552,6 +552,30 @@ function onListClick(e) {
   flash(c.dataset.id);
 }
 $('grid').addEventListener('click', onListClick);
+
+// drag a clip out to a folder or app, or drop one (or files from explorer) on her to feed her
+document.addEventListener('dragstart', e => {
+  const c = e.target.closest?.('.card, .row, .ar, .gx');
+  if (!c || !c.dataset.id) return;
+  e.preventDefault();
+  rouge.send('drag-out', c.dataset.id);
+});
+const mbox = $('mascot');
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  const over = hasFiles(e) && mbox.contains(e.target);
+  e.dataTransfer.dropEffect = over ? 'copy' : 'none';
+  mbox.classList.toggle('feeding', over);
+});
+document.addEventListener('dragleave', e => { if (!e.relatedTarget || !mbox.contains(e.relatedTarget)) mbox.classList.remove('feeding'); });
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const over = mbox.contains(e.target);
+  mbox.classList.remove('feeding');
+  if (!over || !hasFiles(e)) return;
+  rouge.send('drop-feed', [...e.dataTransfer.files].map(f => rouge.pathForFile(f)).filter(Boolean));
+});
 $('archList').addEventListener('click', onListClick);
 $('pager').addEventListener('click', e => {
   const b = e.target.closest('[data-pg]');

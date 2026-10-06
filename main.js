@@ -2,6 +2,7 @@ const { app, BrowserWindow, screen, clipboard, ClipboardItem, ipcMain, Tray, Men
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
 const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 const { detect } = require('./detect');
@@ -341,7 +342,7 @@ async function captureSource() {
   return src;
 }
 
-function addItem(clip) {
+function addItem(clip, quiet = false) {
   let item = history.find(h => h.sig === clip.sig);
   if (item) {
     history = history.filter(h => h !== item);
@@ -368,6 +369,7 @@ function addItem(clip) {
     if (pouch.includes(old.id)) { history.push(old); continue; }
     forget(old);
   }
+  if (quiet) { save(); broadcast(); return item; }
   currentId = item.id;
   if (settings.trail) pushTrail(item.id);
   save();
@@ -597,6 +599,7 @@ function makeWindow(opts, file, show = true) {
     ...opts,
   });
   w.setAlwaysOnTop(true, 'screen-saver');
+  w.webContents.on('will-navigate', e => e.preventDefault());
   w.loadFile(path.join(__dirname, 'ui', file));
   if (show) w.once('ready-to-show', () => w.showInactive());
   return w;
@@ -712,6 +715,87 @@ function absorb() {
   save();
   setTimeout(() => broadcast({ gulp: eat.length || true, gain, levelUp: up, full }), 420);
 }
+
+// feeding by hand: dropping a clip (or files from explorer) on her
+function feed(ids) {
+  const fresh = ids.filter(id => byId(id) && !pouch.includes(id));
+  if (!fresh.length) { if (ids.length) notice(ids.length > 1 ? 'I have those already' : 'I have that one already'); return; }
+  const eat = fresh.slice(0, Math.max(0, MAX_POUCH - pouch.length));
+  if (!eat.length) { broadcast({ full: true }); return; }
+  pouch = [...eat, ...pouch];
+  const before = level().level;
+  let gain = 0;
+  for (const id of eat) { const it = byId(id); if (!it.fed) { it.fed = true; gain += XP_FEED; } }
+  xp += gain;
+  trail = trail.filter(id => !eat.includes(id));
+  for (const id of eat) held.delete(id);
+  sendTrail();
+  save();
+  broadcast({ gulp: eat.length, gain, levelUp: level().level > before ? level().level : 0, full: eat.length < fresh.length });
+}
+
+// dragging a clip out of the list hands the os real files: the files themselves, or a small file made from the clip
+const DRAG_DIR = path.join(os.tmpdir(), 'rouge-drag');
+const LANG_EXT = { javascript: 'js', typescript: 'ts', jsx: 'jsx', python: 'py', csharp: 'cs', java: 'java', cpp: 'cpp', go: 'go', rust: 'rs', php: 'php', ruby: 'rb',
+  kotlin: 'kt', swift: 'swift', sql: 'sql', html: 'html', xml: 'xml', css: 'css', json: 'json', yaml: 'yml', markdown: 'md', shell: 'sh', powershell: 'ps1', lua: 'lua',
+  dockerfile: 'dockerfile', gdscript: 'gd', godot: 'tscn', unity: 'yaml', unreal: 't3d', shader: 'shader' };
+const safeName = s => String(s).replace(/[<>:"/\\|?*\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/[. ]+$/, '') || 'clip';
+let draggingId = null, dragClearT = null;
+function cleanDragDir() {
+  fs.readdir(DRAG_DIR, (err, names) => {
+    if (err) return;
+    for (const n of names) fs.stat(path.join(DRAG_DIR, n), (e, st) => { if (!e && Date.now() - st.mtimeMs > 3600e3) fs.rm(path.join(DRAG_DIR, n), { force: true }, () => {}); });
+  });
+}
+function dragFile(item) {
+  const t = item.text || '';
+  if (item.kind === 'files') return item.paths.slice();
+  if (item.kind === 'path' && fs.existsSync(item.path || '')) return [item.path];
+  fs.mkdirSync(DRAG_DIR, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(DRAG_DIR, 'c'));
+  const put = (name, data) => { const p = path.join(dir, name); fs.writeFileSync(p, data); return [p]; };
+  if (item.kind === 'image') return put(`Image ${item.w}x${item.h}.png`, fs.readFileSync(path.join(IMG_DIR, item.id + '.png')));
+  if (item.kind === 'color' && item.hex) {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(item.hex.slice(i, i + 2), 16)), a = Math.round((item.alpha ?? 1) * 255), px = Buffer.alloc(128 * 128 * 4);
+    for (let i = 0; i < px.length; i += 4) { px[i] = b; px[i + 1] = g; px[i + 2] = r; px[i + 3] = a; }
+    return put(safeName(`${item.cname || 'Colour'} ${item.hex.toUpperCase()}`) + '.png', nativeImage.createFromBitmap(px, { width: 128, height: 128 }).toPNG());
+  }
+  if (item.kind === 'link') return put(safeName((item.url || t).replace(/^[a-z]+:\/\//i, '').replace(/^www\./, '').split(/[/?#]/)[0]) + '.url', `[InternetShortcut]\r\nURL=${item.url || t.trim()}\r\n`);
+  if (item.kind === 'code') {
+    const ext = item.lang === 'model' ? (item.of || 'obj').toLowerCase() : LANG_EXT[item.lang] || 'txt';
+    return put(`snippet.${ext}`, t);
+  }
+  return put(safeName(t.split('\n').find(l => l.trim()) || 'clip') + '.txt', t);
+}
+function dragIcon(item) {
+  let img = null;
+  try {
+    if (item.kind === 'image' || item.thumbed) img = nativeImage.createFromPath(thumbPath(item.id));
+    else if (item.kind === 'files' && ficons[iconKey(item)]) img = nativeImage.createFromDataURL(ficons[iconKey(item)]);
+  } catch {}
+  if (!img || img.isEmpty()) img = trayIcon().resize({ width: 32, height: 32 });
+  const { width, height } = img.getSize();
+  return width > 96 ? img.resize(width >= height ? { width: 96 } : { height: 96 }) : img;
+}
+ipcMain.on('drag-out', (e, id) => {
+  const item = byId(id);
+  if (!item) return;
+  let files;
+  try { files = dragFile(item); } catch { return; }
+  if (!files.length) return;
+  draggingId = id;
+  clearTimeout(dragClearT);
+  try { e.sender.startDrag({ file: files[0], files, icon: dragIcon(item) }); } catch {}
+  dragClearT = setTimeout(() => { draggingId = null; }, 1500);
+  cleanDragDir();
+});
+ipcMain.on('drop-feed', (_e, paths) => {
+  if (draggingId) { const id = draggingId; draggingId = null; return feed([id]); }
+  const list = (Array.isArray(paths) ? paths : []).filter(p => typeof p === 'string' && p).slice(0, 2000);
+  if (!list.length) return;
+  const item = addItem({ sig: 'f:' + list.join('|').toLowerCase(), kind: 'files', paths: list, total: list.length, effect: 'copy' }, true);
+  feed([item.id]);
+});
 
 let prevFg = null;
 function rememberFg() {
