@@ -181,6 +181,9 @@
 
   .grid { margin-top: 10px; height: 276px; overflow-y: auto; overflow-x: hidden; display: grid;
     grid-template-columns: repeat(4, 1fr); grid-auto-rows: 88px; gap: 8px; padding: 2px 4px 8px 2px; margin-right: -8px; }
+  .grid.fade-t, .arch-list.fade-t { -webkit-mask-image: linear-gradient(transparent, #000 14px); }
+  .grid.fade-b, .arch-list.fade-b { -webkit-mask-image: linear-gradient(#000 calc(100% - 14px), transparent); }
+  .grid.fade-t.fade-b, .arch-list.fade-t.fade-b { -webkit-mask-image: linear-gradient(transparent, #000 14px, #000 calc(100% - 14px), transparent); }
   .grid::-webkit-scrollbar { width: 6px; } .grid::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 3px; }
   .card { position: relative; border-radius: 13px; overflow: hidden; cursor: pointer; background: var(--ink-2);
     box-shadow: inset 0 0 0 1px var(--line); transition: transform .35s var(--spring), box-shadow .2s;
@@ -224,10 +227,11 @@
   .grp { position: relative; margin-bottom: 6px; border-radius: 12px; background: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line);
     animation: rise .45s var(--spring) backwards; animation-delay: calc(var(--i) * 22ms + 100ms); }
   .grid.static .grp, .grid.static .gx { animation: none; }
-  .grp > .row { position: sticky; top: 0; z-index: 3; margin-bottom: 0; background: var(--ink-2); border-radius: 12px 12px 0 0; animation: none; }
+  .grp > .row { margin-bottom: 0; background: transparent; border-radius: 12px 12px 0 0; animation: none; }
   .grp .sub { padding: 0 12px 12px 58px; }
-  .sub-list { max-height: 168px; overflow-y: auto; overflow-x: hidden; border-radius: 9px; background: var(--ink); box-shadow: inset 0 0 0 1px var(--line); padding: 4px; }
-  .sub-list::-webkit-scrollbar { width: 5px; } .sub-list::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 3px; }
+  .sub-list { max-height: 168px; overflow-y: auto; overflow-x: hidden; border-radius: 10px; isolation: isolate; overscroll-behavior: auto; background: var(--ink); box-shadow: inset 0 0 0 1px var(--line); padding: 4px; }
+  .sub-list::-webkit-scrollbar { width: 9px; } .sub-list::-webkit-scrollbar-track { margin: 7px 0; }
+  .sub-list::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 5px; border: 2.5px solid var(--ink); }
   .si { display: flex; align-items: center; gap: 7px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: 10.5px; cursor: pointer; transition: background .12s, color .12s; }
   .si:hover { background: var(--ink-3); }
   .si.copied { background: var(--soft); color: var(--rouge); }

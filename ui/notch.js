@@ -295,6 +295,8 @@ async function toggleGroup(id) {
     }
   }
   renderGrid(false);
+  const el = document.querySelector(`#grid [data-id="${CSS.escape(id)}"]`);
+  (el?.closest('.grp') || el)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 const tipRow = (tip, i) => `<div class="tip-row" style="--i:${i}">${kbd(tip.keys)}<span>${tip.t}</span></div>`;
 
@@ -552,6 +554,16 @@ function onListClick(e) {
   flash(c.dataset.id);
 }
 $('grid').addEventListener('click', onListClick);
+// soft fades where the list continues past its edges
+function edgeFades(el) {
+  el.classList.toggle('fade-t', el.scrollTop > 2);
+  el.classList.toggle('fade-b', el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+}
+for (const id of ['grid', 'archList']) {
+  const el = $(id);
+  el.addEventListener('scroll', () => edgeFades(el), { passive: true });
+  new MutationObserver(() => edgeFades(el)).observe(el, { childList: true });
+}
 
 // drag a clip out to a folder or app, or drop one (or files from explorer) on her to feed her
 document.addEventListener('dragstart', e => {
