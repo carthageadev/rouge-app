@@ -794,15 +794,48 @@ function dragIcon(item) {
   const { width, height } = img.getSize();
   return width > 96 ? img.resize(width >= height ? { width: 96 } : { height: 96 }) : img;
 }
-ipcMain.on('drag-out', (e, id) => {
-  const item = byId(id);
-  if (!item) return;
+// windows draws its own drag picture (icon + the full path); the helper keeps it hidden and the
+// overlay draws rouge's card instead. timers keep running while the os drag is in flight.
+const BLANK = nativeImage.createFromBitmap(Buffer.alloc(4), { width: 1, height: 1 });
+let dragOut = null;
+const toOverlay = (x, y) => { const ob = overlay.getBounds(); return { x: x - ob.x, y: y - ob.y }; };
+function herPoint() {
+  const nb = notch.getBounds();
+  return toOverlay(nb.x + layout.her.x + layout.her.w / 2, nb.y + layout.her.y + layout.her.h * .58);
+}
+function dragOver() {
+  if (!dragOut || !layout) return;
+  const p = screen.getCursorScreenPoint(), nb = notch.getBounds(), r = layout.her;
+  const over = hover && p.x >= nb.x + r.x && p.x <= nb.x + r.x + r.w && p.y >= nb.y + r.y && p.y <= nb.y + r.y + r.h;
+  if (over === dragOut.her) return;
+  dragOut.her = over;
+  overlay.webContents.send('drag', { phase: 'her', on: over, to: herPoint() });
+  notch.webContents.send('drag-her', over);
+}
+ipcMain.on('drag-out', (e, msg) => {
+  const id = typeof msg === 'string' ? msg : msg?.id, item = byId(id);
+  if (!item || dragOut) return;
   let files;
   try { files = dragFile(item); } catch { return; }
   if (!files.length) return;
   draggingId = id;
   clearTimeout(dragClearT);
-  try { e.sender.startDrag({ file: files[0], files, icon: dragIcon(item) }); } catch {}
+  const nb = notch.getBounds(), r = msg?.rect;
+  const from = r ? { ...toOverlay(nb.x + r.x + r.w / 2, nb.y + r.y + r.h / 2), w: r.w, h: r.h } : null;
+  dragOut = { id, her: false };
+  overlay.webContents.send('drag', { phase: 'start', item: withIcon(item), from });
+  notch.webContents.send('drag-state', { id, on: true });
+  if (helper) hsend('hidedrag ' + process.pid);
+  try { e.sender.startDrag({ file: files[0], files, icon: helper ? BLANK : dragIcon(item) }); } catch {}
+  // back here once the button is released
+  dragOver();
+  const p = screen.getCursorScreenPoint();
+  const inNotch = hover && layout && p.x >= nb.x + layout.open.x && p.x <= nb.x + layout.open.x + layout.open.w && p.y >= nb.y + layout.open.y && p.y <= nb.y + layout.open.y + layout.open.h;
+  const outcome = dragOut.her ? 'fed' : inNotch ? 'back' : 'drop';
+  overlay.webContents.send('drag', { phase: 'end', outcome, to: herPoint(), from });
+  notch.webContents.send('drag-state', { id, on: false, outcome });
+  notch.webContents.send('drag-her', false);
+  dragOut = null;
   dragClearT = setTimeout(() => { draggingId = null; }, 1500);
   cleanDragDir();
 });
@@ -872,6 +905,7 @@ function tick() {
   }
   setInteractive(hover || !!inRect(layout.handle));
 
+  if (dragOut) { dragOver(); overHerAt = 0; return; }
   if (hover && feedable && trail.length && Date.now() - hoverAt > 450 && inRect(layout.her)) {
     if (!overHerAt) overHerAt = Date.now();
     else if (Date.now() - overHerAt > 160) { overHerAt = 0; absorb(); }

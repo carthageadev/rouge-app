@@ -124,6 +124,7 @@
     sleepy: { ParamEyeLOpen: .08, ParamEyeROpen: .08, ParamMouthForm: 0, ParamAngleZ: 8 },
     dizzy: { ParamEyeLOpen: .45, ParamEyeROpen: .45, ParamMouthForm: -.5, ParamBrowLY: .8, ParamBrowRY: .8 },
     gulp: { ParamMouthOpenY: .9, ParamMouthForm: .3, Param126: 1, Param48: .8 },
+    ah: { ParamMouthOpenY: 1, ParamMouthForm: .7, Param48: .7, ParamEyeLSmile: .35, ParamEyeRSmile: .35, ParamBrowLY: .7, ParamBrowRY: .7 },
   };
 
   const STAGE = { left: -14, top: -40, w: 136, h: 164 };
@@ -382,6 +383,7 @@
       tap, setForm, setCustom, say, pause, resume, setBoil(on) { boilOn = !!on; }, get form() { return form; }, get custom() { return custom; },
       look(dx, dy) { gaze = { x: Math.max(-1, Math.min(1, dx / 220)), y: Math.max(-1, Math.min(1, dy / 160)) }; },
       gulp() { setFace('gulp', 900); squish(1.2); boil(); },
+      expect(on) { if (on) { setFace('ah', 20000); squish(.5); } else if (face === 'ah') setFace(mood === 'mad' ? 'angry' : 'normal'); },
       cheer() { setFace('star', 1100); hop(1.1); sparks(8); boil(); },
       toss() { setFace('laugh', 900); wobble = .5; hop(.6); },
     };

@@ -570,8 +570,17 @@ document.addEventListener('dragstart', e => {
   const c = e.target.closest?.('.card, .row, .ar, .gx');
   if (!c || !c.dataset.id) return;
   e.preventDefault();
-  rouge.send('drag-out', c.dataset.id);
+  const r = c.getBoundingClientRect();
+  rouge.send('drag-out', { id: c.dataset.id, rect: { x: r.left, y: r.top, w: r.width, h: r.height } });
 });
+// the picked-up clip lifts out of the list while it's away, and settles back after
+rouge.on('drag-state', s => {
+  const el = document.querySelector(`[data-id="${CSS.escape(s.id)}"]`);
+  if (!el) return;
+  if (s.on) el.classList.add('lifted');
+  else { el.classList.remove('lifted'); el.classList.add('landed'); setTimeout(() => el.classList.remove('landed'), 550); }
+});
+rouge.on('drag-her', on => { mbox.classList.toggle('feeding', on); mascot.expect?.(on); });
 const mbox = $('mascot');
 const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
 document.addEventListener('dragover', e => {

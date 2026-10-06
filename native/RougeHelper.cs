@@ -37,6 +37,11 @@ public static class RougeHelper
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SHGetFileInfo(string path, uint attrs, ref SHFILEINFO info, uint size, uint flags);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern int SHDefExtractIcon(string location, int index, uint flags, out IntPtr large, out IntPtr small, uint size);
     [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("shell32.dll", EntryPoint = "#727")] static extern int SHGetImageList(int list, ref Guid iid, out IImageList ppv);
     [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] static extern int AssocQueryString(uint flags, uint str, string assoc, string extra, StringBuilder outStr, ref uint len);
 
@@ -309,6 +314,39 @@ public static class RougeHelper
         return ok;
     }
 
+    // while rouge drags something out, keep windows' own drag picture hidden (rouge draws its own card)
+    static int hideToken;
+    static void HideDragImage(uint pid)
+    {
+        int token = Interlocked.Increment(ref hideToken);
+        var t = new Thread(() =>
+        {
+            var clock = Stopwatch.StartNew();
+            bool seen = false;
+            var name = new StringBuilder(32);
+            while (token == hideToken && clock.ElapsedMilliseconds < 120000)
+            {
+                IntPtr found = IntPtr.Zero;
+                EnumWindows((h, l) =>
+                {
+                    uint p;
+                    GetWindowThreadProcessId(h, out p);
+                    if (p != pid) return true;
+                    name.Length = 0;
+                    GetClassName(h, name, 32);
+                    if (name.ToString() != "SysDragImage") return true;
+                    found = h;
+                    return false;
+                }, IntPtr.Zero);
+                if (found != IntPtr.Zero) { seen = true; if (IsWindowVisible(found)) ShowWindow(found, 0); }
+                else if (seen || clock.ElapsedMilliseconds > 4000) break;
+                Thread.Sleep(3);
+            }
+        });
+        t.IsBackground = true;
+        t.Start();
+    }
+
     // the icon windows itself shows for a file type (or a specific file), as a png, plus where it came from
     static IImageList bigIcons;
     static string FileIcon(string id, bool byExt, string arg, int size)
@@ -367,6 +405,7 @@ public static class RougeHelper
                     case "keys": KeysOn = parts.Length > 1 && parts[1] == "1"; break;
                     case "paste": Paste(); break;
                     case "activate": Activate(new IntPtr(long.Parse(parts[1]))); break;
+                    case "hidedrag": HideDragImage(uint.Parse(parts[1])); break;
                     case "icon":
                         {
                             var p = line.TrimEnd('\r', '\n').Split(new[] { ' ' }, 4);

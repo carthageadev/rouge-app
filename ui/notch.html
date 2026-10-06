@@ -114,6 +114,9 @@
     background: radial-gradient(closest-side, color-mix(in srgb, var(--rouge) 34%, transparent), transparent); opacity: 0; transform: scale(.8);
     transition: opacity .4s, transform .6s var(--spring); }
   .mascot-box.hungry::before { opacity: 1; transform: scale(1); animation: hungry 1.6s ease-in-out infinite; }
+  .card.lifted, .row.lifted, .ar.lifted, .gx.lifted { opacity: .32; transform: scale(.94); filter: saturate(.6); transition: opacity .25s, transform .4s var(--spring), filter .25s; }
+  .card.landed, .row.landed, .ar.landed, .gx.landed { animation: landed .55s var(--spring); }
+  @keyframes landed { 0% { opacity: .32; transform: scale(.94); filter: saturate(.6); } 65% { opacity: 1; transform: scale(1.03); filter: none; } }
   .mascot-box.feeding::before { opacity: 1; transform: scale(1.18); animation: none; background: radial-gradient(closest-side, color-mix(in srgb, var(--rouge) 55%, transparent), transparent); }
   @keyframes hungry { 50% { transform: scale(1.08); opacity: .7; } }
   .pouch-info { flex: 1; min-width: 0; position: relative; }

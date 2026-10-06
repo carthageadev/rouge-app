@@ -44,9 +44,25 @@
   .pk-row .t2 { font-size: 10.5px; color: var(--pk-fg2); display: flex; align-items: center; gap: 5px; margin-top: 1px; white-space: nowrap; overflow: hidden; }
   .src-ic { width: 12px; height: 12px; object-fit: contain; border-radius: 3px; flex: none; }
   .pk-row .n { font-size: 10px; color: var(--pk-fg2); font-variant-numeric: tabular-nums; }
+
+  #dcard { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; will-change: transform, opacity; z-index: 500; }
+  #dcard .dc { position: absolute; left: -100px; top: -34px; width: 200px; display: flex; flex-direction: column; align-items: center; }
+  #dcard .dc-tile { position: relative; width: 68px; height: 68px; border-radius: 18px; background: #fff; display: grid; place-items: center;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 18px 34px -12px rgba(0,0,0,.6), 0 4px 10px -4px rgba(0,0,0,.35); transition: box-shadow .25s; }
+  #dcard .dc-tile > img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+  #dcard .dc-label { margin-top: 8px; max-width: 196px; padding: 4px 10px 5px; border-radius: 10px; background: rgba(16,16,20,.9); color: #fff;
+    font: 600 11.5px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-shadow: 0 8px 18px -8px rgba(0,0,0,.55); transition: background .2s, transform .3s cubic-bezier(.3,1.4,.5,1); }
+  #dcard .dc-label b { color: var(--rouge); font-weight: 700; }
+  #dcard.her .dc-tile { box-shadow: 0 0 0 3px var(--rouge), 0 0 26px 4px color-mix(in srgb, var(--rouge) 55%, transparent); }
+  #dcard.her .dc-label { background: var(--rouge); transform: translateY(-2px); }
+  #dcard.her .dc-label b { color: #fff; }
+  .poof { position: absolute; width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%; border: 2px solid var(--rouge);
+    animation: ripple .55s cubic-bezier(.2,.7,.3,1) forwards; }
 </style>
 </head>
 <body>
+<div id="dcard"></div>
 <div id="picker"><div class="pk-panel">
   <div class="pk-head"><span><span class="kbd">Ctrl V</span>will paste</span><span id="pkPos"></span></div>
   <div class="pk-rows" id="pkRows"></div>
@@ -80,6 +96,7 @@
   const cvel = { x: 0, y: 0, t: performance.now() };
   rouge.on('cursor', p => {
     if (p.jump) for (const it of items.values()) { it.x = p.x + OFFSET.x; it.y = p.y + OFFSET.y; it.vx = it.vy = 0; }
+    if (p.jump && dc.on) { dc.x = p.x; dc.y = p.y; dc.vx = dc.vy = 0; }
     const now = performance.now(), dt = Math.max(8, now - cvel.t) / 1000;
     if (!p.jump) {
       cvel.x += ((p.x - cur.x) / dt - cvel.x) * .35;
@@ -112,6 +129,67 @@
     });
     order = ids;
   });
+
+  // a clip being dragged out of rouge: rouge draws the card, windows' own drag picture is hidden
+  const dc = { el: document.getElementById('dcard'), on: false, mode: 'off', x: 0, y: 0, vx: 0, vy: 0, s: 0, vs: 0, o: 0, rot: 0, t0: 0, from: null, to: null };
+  const dragging = () => dc.on && (dc.mode === 'follow' || dc.mode === 'her');
+  function dragLabel(it) {
+    const e = Rouge.esc;
+    if (it.kind === 'files') return e(it.name || 'Files') + (it.count > 1 ? ` <b>+${it.count - 1}</b>` : '');
+    if (it.kind === 'image') return `Image <b>${it.w}×${it.h}</b>`;
+    if (it.kind === 'color') return `${e(it.cname || 'Colour')} <b>${e((it.hex || '').toUpperCase())}</b>`;
+    if (it.kind === 'link') return e(Rouge.domain(it.url || it.text || ''));
+    if (it.kind === 'email') return e(it.email || it.text || '');
+    if (it.kind === 'code') return `${e(Rouge.langName(it))} <b>snippet</b>`;
+    if (it.kind === 'path') return e(it.name || 'Path');
+    return e(Rouge.preview(it, 34) || 'Text');
+  }
+  rouge.on('drag', m => {
+    const now = performance.now();
+    if (m.phase === 'start') {
+      dc.el.innerHTML = `<div class="dc"><div class="dc-tile">${Rouge.tile(m.item)}</div><div class="dc-label">${dragLabel(m.item)}</div></div>`;
+      dc.el.classList.remove('her');
+      const f = m.from || { x: cur.x, y: cur.y };
+      Object.assign(dc, { on: true, mode: 'follow', x: f.x, y: f.y, vx: 0, vy: 0, s: .72, vs: 0, o: .2, rot: 0, from: m.from, t0: now });
+    } else if (m.phase === 'her' && dragging()) {
+      dc.mode = m.on ? 'her' : 'follow'; dc.to = m.to;
+      dc.el.classList.toggle('her', m.on);
+    } else if (m.phase === 'end' && dc.on) {
+      dc.to = m.to; dc.t0 = now;
+      dc.mode = m.outcome === 'fed' ? 'fed' : m.outcome === 'back' && dc.from ? 'back' : 'drop';
+      if (dc.mode === 'drop') { const r = document.createElement('div'); r.className = 'poof'; r.style.left = dc.x + 'px'; r.style.top = dc.y + 'px'; document.body.appendChild(r); setTimeout(() => r.remove(), 650); }
+    }
+  });
+  function dragFrame(t, dt) {
+    if (!dc.on) return;
+    if (dc.mode === 'follow') {
+      spring(dc, cur.x + 44, cur.y + 40, 560, .72, dt);
+      springScale(dc, 1, dt);
+      dc.o += (1 - dc.o) * Math.min(1, dt * 14);
+      dc.rot += (clamp(dc.vx * .018, -14, 14) - dc.rot) * Math.min(1, dt * 10);
+    } else if (dc.mode === 'her') {
+      spring(dc, dc.to.x, dc.to.y - 4, 300, .78, dt);
+      springScale(dc, .6, dt);
+      dc.o += (1 - dc.o) * Math.min(1, dt * 14);
+      dc.rot += (Math.sin(t / 90) * 4 - dc.rot) * Math.min(1, dt * 10);
+    } else if (dc.mode === 'fed') {
+      spring(dc, dc.to.x, dc.to.y, 420, .9, dt);
+      springScale(dc, .08, dt);
+      dc.rot += (-dc.rot) * Math.min(1, dt * 8);
+      if (t - dc.t0 > 180) dc.o -= dt * 6;
+    } else if (dc.mode === 'back') {
+      spring(dc, dc.from.x, dc.from.y, 240, .86, dt);
+      springScale(dc, .8, dt);
+      dc.rot += (-dc.rot) * Math.min(1, dt * 8);
+      dc.o -= dt * (t - dc.t0 > 160 ? 3.4 : .6);
+    } else {
+      springScale(dc, t - dc.t0 < 90 ? 1.16 : 0, dt);
+      dc.o -= dt * 4.2;
+    }
+    if (dc.o <= 0 && !dragging()) { dc.on = false; dc.el.style.opacity = 0; dc.el.innerHTML = ''; return; }
+    dc.el.style.transform = `translate(${dc.x}px,${dc.y}px) rotate(${dc.rot}deg) scale(${Math.max(0, dc.s)})`;
+    dc.el.style.opacity = clamp(dc.o, 0, 1);
+  }
 
   rouge.on('absorb', t => {
     const now = performance.now(), eat = t.ids ? order.filter(id => t.ids.includes(id)) : order;
@@ -207,7 +285,7 @@
       }
       spring(it, tx, ty, n === 0 ? 420 : Math.max(150, 280 - n * 22), .74, dt);
       springScale(it, idle ? .86 : 1, dt);
-      it.o += ((idle ? .5 : 1) - it.o) * Math.min(1, dt * 5);
+      it.o += ((dragging() ? 0 : idle ? .5 : 1) - it.o) * Math.min(1, dt * (dragging() ? 12 : 5));
       it.rot += (clamp(it.vx * .03, -20, 20) + (idle ? n * 4 : 0) - it.rot) * Math.min(1, dt * 9);
       it.el.style.zIndex = 100 - n;
       px = it.x; py = it.y; n++;
@@ -243,6 +321,7 @@
       it.el.style.opacity = clamp(it.o, 0, 1);
     }
 
+    dragFrame(t, dt);
     if (pk.on) {
       const W = innerWidth, H = innerHeight;
       let tx = cur.x + 26, ty = cur.y - 122;
