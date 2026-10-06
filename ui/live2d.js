@@ -2,17 +2,19 @@
   const MODEL = '../assets/live2d/MO/MO.model3.json';
   const BASE = { Param156: 1 };
 
-  const HAIR_PARTS = ['Part136', 'Part141', 'Part146', 'Part147', 'Part196', 'Part3', 'Part33', 'Part29', 'Part30',
-    'Part40', 'Part44', 'Part206', 'Part204', 'Part148', 'Part19', 'Part48'];
-  const SKIN_PARTS = ['Part110', 'Part126', 'Part134', 'Part112', 'Part103', 'Part105'];
-  const TOP_PARTS = ['Part127', 'ArtMesh399_Skinning', 'ArtMesh400_Skinning', 'ArtMesh401_Skinning',
-    'ArtMesh403_Skinning', 'ArtMesh404_Skinning', 'ArtMesh405_Skinning'];
-  const SLEEVE_PARTS = ['ArtMesh402_Skinning2', 'ArtMesh402_Skinning', 'ArtMesh406_Skinning'];
-  const SKIRT_PARTS = ['Part132', 'Part171'];
+  const GROUPS = [
+    ['skip', ['Part24', 'Part19', 'Part157']],
+    ['streak', ['Part172', 'Part191']],
+    ['ears', ['Part48', 'Part180']],
+    ['front', ['Part33', 'Part29', 'Part3']],
+    ['back', ['Part136', 'Part141', 'Part146', 'Part147', 'Part148']],
+    ['skin', ['Part110', 'Part126', 'Part134', 'Part112', 'Part103', 'Part105']],
+  ];
   const IRIS = ['ArtMesh243', 'ArtMesh503', 'ArtMesh504', 'ArtMesh562', 'ArtMesh563', 'ArtMesh564'];
 
   const HAIR_COLORS = {
-    ink: { label: 'Ink', swatch: '#1b1b1f' },
+    ink: { label: 'Sketch', swatch: '#1b1b1f' },
+    raven: { label: 'Raven', swatch: '#26232e', hair: [.15, .14, .19], hi: [.6, .6, .7] },
     rouge: { label: 'Rouge', swatch: '#dc4256', hair: [.86, .26, .34], hi: [1, .78, .8] },
     sakura: { label: 'Sakura', swatch: '#fa9eb8', hair: [.98, .62, .72], hi: [1, .93, .95] },
     honey: { label: 'Honey', swatch: '#fad175', hair: [.98, .82, .46], hi: [1, .97, .88] },
@@ -43,15 +45,8 @@
   };
 
   const OUTFITS = {
-    school: { label: 'School', swatch: '#f4f4f6', p: {} },
-    sakura: { label: 'Sakura', swatch: '#ffccdb', p: {}, top: [1, .8, .86], sleeve: [1, .8, .86], skirt: [.35, .32, .5] },
-    midnight: { label: 'Midnight vest', swatch: '#5c669e', p: { Param137: 1 }, top: [.36, .4, .62], skirt: [.25, .25, .35] },
-    mint: { label: 'Mint', swatch: '#ccffeb', p: { Param50: 2 }, top: [.8, 1, .92], sleeve: [.8, 1, .92], skirt: [.3, .52, .47] },
-    cocoa: { label: 'Cocoa vest', swatch: '#b88c70', p: { Param137: 1 }, top: [.72, .55, .44], skirt: [.45, .32, .26] },
-    lilac: { label: 'Lilac', swatch: '#dbccff', p: { Param50: 1 }, top: [.86, .8, 1], sleeve: [.86, .8, 1], skirt: [.42, .36, .62] },
-    rouge: { label: 'Rouge', swatch: '#ff8594', p: {}, top: [1, .52, .58], sleeve: [1, .52, .58], skirt: [.28, .2, .26] },
-    sporty: { label: 'Sporty', swatch: '#ffedb3', p: { Param192: 1, Param50: 5 }, top: [1, .93, .7], sleeve: [1, .93, .7] },
-    noir: { label: 'Noir', swatch: '#3a3a44', p: { Param137: 1 }, top: [.26, .26, .3], skirt: [.2, .2, .24] },
+    school: { label: 'School', swatch: '#f4f4f6' },
+    ...Object.fromEntries(Object.entries(Wardrobe.DESIGNS).map(([k, d]) => [k, { label: d.label, swatch: d.swatch, design: d }])),
   };
 
   const nums = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => [a + i, String(a + i)]);
@@ -83,19 +78,19 @@
   const FORMS = {
     mo: { name: 'Mo', p: { Param19: 1, Param74: 3 }, hair: 'ink', eye: 'ink', skin: 'porcelain', outfit: 'school',
       taps: ['Hehe~', 'Copied & carried!', 'Need a paste?', 'Boop!', 'Mm?'], mad: ['Hey!!', 'Stop poking!', 'Mou~!!'] },
-    rouge: { name: 'Rouge', p: { Param19: 1, Param74: 3, Param194: 1 }, hair: 'rouge', eye: 'ruby', skin: 'warm', outfit: 'rouge',
+    rouge: { name: 'Rouge', p: { Param19: 1, Param74: 3, Param194: 1 }, hair: 'rouge', eye: 'ruby', skin: 'warm', outfit: 'varsity',
       taps: ['Rouge on duty ♥', 'Copied & carried!', 'Need a paste?', 'Hehe~'], mad: ['Mou~!!', 'Stop poking!', 'Hmph!!'] },
-    momo: { name: 'Momo', p: { Param131: 1, Param134: 1, Param128: 2, Param74: 3 }, hair: 'sakura', eye: 'amethyst', skin: 'rosy', outfit: 'sakura',
+    momo: { name: 'Momo', p: { Param131: 1, Param134: 1, Param128: 2, Param74: 3 }, hair: 'sakura', eye: 'amethyst', skin: 'rosy', outfit: 'idol',
       taps: ['Kyaa~', 'Twin tails!', 'Ehehe ♡', 'Boing boing'], mad: ['Meanie!!', 'Hmph!', 'No touching!'] },
-    sunny: { name: 'Sunny', p: { Param117: 4, Param209: 1, Param211: 1, Param74: 1 }, hair: 'honey', eye: 'azure', skin: 'warm', outfit: 'sporty',
+    sunny: { name: 'Sunny', p: { Param117: 4, Param209: 1, Param211: 1, Param74: 1 }, hair: 'honey', eye: 'azure', skin: 'warm', outfit: 'marine',
       taps: ['Good morning!', 'Sunshine~', 'Yay!', 'Copy that!'], mad: ['Hey now!', 'Rude!!', 'Grr~'] },
-    mint: { name: 'Mint', p: { Param131: 3, Param134: 3, Param74: 3 }, hair: 'mint', eye: 'jade', skin: 'warm', outfit: 'mint',
+    mint: { name: 'Mint', p: { Param131: 3, Param134: 3, Param74: 3 }, hair: 'mint', eye: 'jade', skin: 'warm', outfit: 'hoodie',
       taps: ['Fresh copy!', 'Odango power!', 'Hi hi~', 'Sparkly!'], mad: ['Meanie!', 'No more!!', 'Grr~'] },
-    yoru: { name: 'Yoru', p: { Param151: 1, Param2: 1, Param20: 3 }, hair: 'night', eye: 'amber', skin: 'warm', outfit: 'midnight',
+    yoru: { name: 'Yoru', p: { Param151: 1, Param2: 1, Param20: 3 }, hair: 'night', eye: 'amber', skin: 'warm', outfit: 'maid',
       taps: ['…nya?', 'Stargazing~', 'Purr…', 'Night mode ✦'], mad: ['Fshhh!', 'Nya!!', 'Leave me be!'] },
-    golshi: { name: 'Golshi', p: { Param151: 7, Param19: 5, Param74: 3 }, hair: 'silver', eye: 'violet', skin: 'warm', outfit: 'lilac',
+    golshi: { name: 'Golshi', p: { Param151: 7, Param19: 5, Param74: 3 }, hair: 'silver', eye: 'violet', skin: 'warm', outfit: 'sailor',
       taps: ['Wanna see a dropkick?', 'Full sail!', 'Yakisoba time!', 'Pakapuu~'], mad: ['HEY!!', 'Dropkick incoming!', 'Stop that!!'] },
-    kuri: { name: 'Kuri', p: { Param117: 3, Param19: 2, Param74: 3 }, hair: 'cocoa', eye: 'forest', skin: 'warm', outfit: 'cocoa',
+    kuri: { name: 'Kuri', p: { Param117: 3, Param19: 2, Param74: 3 }, hair: 'cocoa', eye: 'forest', skin: 'warm', outfit: 'cardigan',
       taps: ['Autumn vibes~', 'Braids!', 'Tea time?', 'Hehe'], mad: ['Hey!', 'Stop it!', 'Hmph!'] },
   };
 
@@ -104,7 +99,10 @@
     const p = FORMS[formKey].p, id = Array.isArray(item.param) ? item.param[0] : item.param;
     return p[id] ?? 0;
   }
-  const look = (formKey, custom, k) => (custom && custom[k]) || FORMS[formKey][k];
+  const look = (formKey, custom, k) => {
+    const v = custom && custom[k], sets = { hair: HAIR_COLORS, eye: EYE_COLORS, skin: SKIN_TONES, outfit: OUTFITS };
+    return v && (!sets[k] || sets[k][v]) ? v : FORMS[formKey][k];
+  };
 
   const FACES = {
     normal: {},
@@ -163,9 +161,10 @@
     let gaze = { x: 0, y: 0 };
     let blink = 1, talking = 0, wobble = 0, face = 'normal', mood = null, boilT = 0, boilFast = 0;
     let faceT = null, moodT = null, sayT = null;
-    let model = null, app = null, rig = null, running = true, applyColors = () => {};
+    let model = null, app = null, rig = null, running = true, applyColors = () => {}, wardrobe = null, wearing = null;
     let styleParams = {};
-    const body = { y: 0, vy: 0, sq: 0, vsq: 0, shake: 0 };
+    let boilOn = false;
+    const body = { y: 0, vy: 0, sq: 0, vsq: 0, shake: 0, sway: 0 };
 
     function resolveStyle() {
       const p = { ...FORMS[form].p };
@@ -173,7 +172,6 @@
         if (custom[item.key] === undefined) continue;
         for (const id of [].concat(item.param)) p[id] = custom[item.key];
       }
-      Object.assign(p, OUTFITS[look(form, custom, 'outfit')]?.p || {});
       styleParams = p;
     }
     resolveStyle();
@@ -204,13 +202,12 @@
 
       const core = model.internalModel.coreModel, raw = core.getModel();
       const pIds = Array.from(raw.parts.ids), pPar = raw.parts.parentIndices, dPar = raw.drawables.parentPartIndices, dIds = Array.from(raw.drawables.ids);
-      const RULES = [['hair', HAIR_PARTS], ['skin', SKIN_PARTS], ['sleeve', SLEEVE_PARTS], ['top', TOP_PARTS], ['skirt', SKIRT_PARTS]];
       const groupOf = d => {
-        for (let q = dPar[d]; q >= 0; q = pPar[q]) for (const [g, list] of RULES) if (list.includes(pIds[q])) return g;
+        for (let q = dPar[d]; q >= 0; q = pPar[q]) for (const [g, list] of GROUPS) if (list.includes(pIds[q])) return g;
         return null;
       };
-      const groups = { hair: [], skin: [], sleeve: [], top: [], skirt: [], eye: IRIS.map(id => dIds.indexOf(id)).filter(i => i >= 0) };
-      for (let d = 0; d < dIds.length; d++) { const g = groupOf(d); if (g) groups[g].push(d); }
+      const groups = { front: [], back: [], streak: [], ears: [], skin: [], eye: IRIS.map(id => dIds.indexOf(id)).filter(i => i >= 0) };
+      for (let d = 0; d < dIds.length; d++) { const g = groupOf(d); if (groups[g]) groups[g].push(d); }
       const paint = (list, mul, scr) => {
         for (const d of list) {
           core.setOverwriteFlagForDrawableMultiplyColors(d, !!mul);
@@ -219,29 +216,41 @@
           if (scr) core.setScreenColorByRGBA(d, scr[0], scr[1], scr[2], 1);
         }
       };
+      const BLACK = [0, 0, 0], mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
       applyColors = () => {
         const h = HAIR_COLORS[look(form, custom, 'hair')] || HAIR_COLORS.ink;
         const e = EYE_COLORS[look(form, custom, 'eye')] || EYE_COLORS.ink;
         const sk = SKIN_TONES[look(form, custom, 'skin')] || SKIN_TONES.porcelain;
-        const o = OUTFITS[look(form, custom, 'outfit')] || OUTFITS.school;
-        paint(groups.hair, h.hi, h.hair);
+        if (h.hair) {
+          paint(groups.front, BLACK, h.hair);
+          paint(groups.back, BLACK, mix(h.hair, BLACK, .2));
+          paint(groups.streak, BLACK, mix(h.hair, [1, 1, 1], .5));
+          paint(groups.ears, h.hi, h.hair);
+        } else for (const g of ['front', 'back', 'streak', 'ears']) paint(groups[g]);
         paint(groups.eye, null, e.c);
         paint(groups.skin, sk.c);
-        paint(groups.top, o.top);
-        paint(groups.sleeve, o.sleeve);
-        paint(groups.skirt, o.skirt);
+        const outfit = look(form, custom, 'outfit');
+        if (wardrobe && outfit !== wearing) { wearing = outfit; wardrobe.apply(OUTFITS[outfit]?.design || null, styleParams); }
       };
       applyColors();
+      Outfits.prepare(model, app.renderer).then(w => { wardrobe = w; wearing = null; applyColors(); }).catch(e => console.error('[outfit]', e));
 
       const idx = {};
       const set = (id, v) => { let i = idx[id]; if (i === undefined) i = idx[id] = core.getParameterIndex(id); if (i >= 0) core.setParameterValueByIndex(i, v); };
+      const FACE_IDS = [...new Set(['ParamEyeLOpen', 'ParamEyeROpen', ...Object.values(FACES).flatMap(f => Object.keys(f))])].filter(id => id !== 'ParamAngleZ');
+      const neutral = { ParamEyeLOpen: 1, ParamEyeROpen: 1, Param48: .5 };
+      const putFace = () => {
+        for (const id of FACE_IDS) {
+          const v = cur[id] ?? neutral[id] ?? 0;
+          set(id, id === 'ParamEyeLOpen' || id === 'ParamEyeROpen' ? v * blink : v);
+        }
+        if (talking > performance.now()) set('ParamMouthOpenY', Math.max(cur.ParamMouthOpenY || 0, (Math.sin(performance.now() / 1000 * 22) + 1) * .3));
+      };
       let last = performance.now();
-      model.internalModel.on('beforeModelUpdate', () => {
+      model.internalModel.on('afterMotionUpdate', () => {
         const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;
         const k = 1 - Math.exp(-dt * 12);
-        const neutral = { ParamEyeLOpen: 1, ParamEyeROpen: 1, Param48: .5 };
-        const keys = new Set([...Object.keys(cur), ...Object.keys(target)]);
-        for (const id of keys) {
+        for (const id of new Set([...FACE_IDS, ...Object.keys(target)])) {
           const from = cur[id] ?? neutral[id] ?? 0, to = target[id] ?? neutral[id] ?? 0;
           cur[id] = from + (to - from) * k;
         }
@@ -251,23 +260,20 @@
         for (const [id, v] of Object.entries(BASE)) set(id, v);
 
         boilT += dt * (boilFast > now ? 9 : 3.6);
-        const fr = Math.floor(boilT) % 3;
+        const fr = boilOn ? Math.floor(boilT) % 3 : 0;
         set('Param28', fr === 0 ? 1 : 0); set('Param29', fr === 1 ? 1 : 0); set('Param33', fr === 2 ? 1 : 0);
         for (const [id, v] of Object.entries(styleParams)) set(id, v);
-        for (const id of keys) set(id, (id === 'ParamEyeLOpen' || id === 'ParamEyeROpen') ? cur[id] * blink : cur[id]);
-        if (!keys.has('ParamEyeLOpen')) { set('ParamEyeLOpen', blink); set('ParamEyeROpen', blink); }
+        putFace();
         const air = Math.max(-1, Math.min(1, -body.vy / 300));
         set('ParamAngleX', cur.lx * 22 + Math.sin(t * .7) * 2);
-        set('ParamAngleY', -cur.ly * 14 + Math.sin(t * .9) * 1.5 + air * 6);
-        set('ParamAngleZ', (cur.ParamAngleZ || 0) + Math.sin(t * .6) * 2.5 + Math.sin(t * 14) * wobble * 10);
-        set('ParamBodyAngleX', cur.lx * 6);
-        set('ParamBodyAngleY', air * 4);
+        set('ParamAngleY', -cur.ly * 14 + Math.sin(t * .9) * 1.5 + air * 10);
+        set('ParamAngleZ', (cur.ParamAngleZ || 0) + Math.sin(t * .6) * 2.5 + Math.sin(t * 14) * wobble * 10 + body.sway * 6);
         set('ParamEyeBallX', cur.lx * .9);
         set('ParamEyeBallY', -cur.ly * .8);
         set('ParamBreath', (Math.sin(t * 2.2) + 1) / 2);
-        if (talking > now) set('ParamMouthOpenY', Math.max(cur.ParamMouthOpenY || 0, (Math.sin(t * 22) + 1) * .3));
         wobble *= Math.exp(-dt * 3);
       });
+      model.internalModel.on('beforeModelUpdate', putFace);
 
       app.ticker.add(() => {
         const dt = Math.min(.033, app.ticker.deltaMS / 1000);
@@ -277,6 +283,7 @@
         }
         body.vsq += (-150 * body.sq - 11 * body.vsq) * dt; body.sq += body.vsq * dt;
         body.shake *= Math.exp(-dt * 8);
+        body.sway = Math.sin(performance.now() / 22) * body.shake;
         const stretch = body.y < 0 ? Math.min(.06, -body.vy / 9000) : 0;
         rig.scale.set(1 + body.sq * .09 - stretch, 1 - body.sq * .09 + stretch * 1.4);
         rig.position.x = W / 2 + Math.sin(performance.now() / 22) * body.shake * 4;
@@ -365,7 +372,7 @@
 
     host.addEventListener('click', tap);
     return {
-      tap, setForm, setCustom, say, pause, resume, get form() { return form; }, get custom() { return custom; },
+      tap, setForm, setCustom, say, pause, resume, setBoil(on) { boilOn = !!on; }, get form() { return form; }, get custom() { return custom; },
       look(dx, dy) { gaze = { x: Math.max(-1, Math.min(1, dx / 220)), y: Math.max(-1, Math.min(1, dy / 160)) }; },
       gulp() { setFace('gulp', 900); squish(1.2); boil(); },
       cheer() { setFace('star', 1100); hop(1.1); sparks(8); boil(); },
