@@ -98,9 +98,16 @@
   for (const [k, [exts]] of Object.entries(GROUPS)) for (const e of exts.split(' ')) TYPE_OF[e] = k;
   const typeGlyph = ext => TYPE_OF[ext] ? GROUPS[TYPE_OF[ext]][1]() : null;
 
+  // grey for a handful, warming through yellow and orange to red by fifty
+  function countTone(n) {
+    if (n < 10) return '--b:#8b8f99;--f:#fff';
+    const t = Math.min(1, (n - 10) / 40), h = Math.round(48 - 48 * t);
+    return `--b:hsl(${h} 92% ${Math.round(53 - 7 * t)}%);--f:${h > 32 ? '#2b1d00' : '#fff'}`;
+  }
+
   function fileTile(item) {
     const n = item.count || item.paths?.length || 1;
-    const badge = n > 1 ? `<span class="g-count">${n > 99 ? '99+' : n}</span>` : '';
+    const badge = n > 1 ? `<span class="g-count" style="${countTone(n)}">${n > 99 ? '99+' : n}</span>` : '';
     if (item.thumb) return `<img class="g-img" src="${item.thumb}" draggable="false" alt="">${badge}`;
     const ext = item.ext || '';
     const one = item.dir0 || !ext ? (item.dir0 === false && item.ficon ? `<div class="g-ficon"><img src="${item.ficon}" alt=""></div>` : folder)
