@@ -3,48 +3,87 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const { pathToFileURL } = require('url');
+const { detect } = require('./detect');
 
 if (!app.requestSingleInstanceLock()) app.quit();
 
-const MAX_HISTORY = 120;
+const ARCHIVE_MAX = 5000;
+const RECENT = 100;
 const MAX_TRAIL = 6;
 const MAX_POUCH = 12;
+const XP_FEED = 10;
+const SMART_MIN = 25;
 const NOTCH_W = 540, NOTCH_H = 540;
 const PILL_W = 190, PILL_H = 32, OPEN_W = 520, OPEN_H = 510, PAD = 12;
 const MENU_W = 360;
 const TASKBAR_GAP = 4;
 const BROWSERS = /^(chrome|msedge|brave|vivaldi|opera|firefox|arc|thorium|chromium|zen|librewolf|waterfox)$/i;
 
-let STORE, IMG_DIR;
+let STORE, IMG_DIR, THUMB_DIR;
 let overlay, notch, menu, tray;
-let history = [], trail = [], pouch = [], icons = {};
+let history = [], trail = [], pouch = [], icons = {}, xp = 0;
 const trailAt = new Map();
 let currentId = null;
 let lastSig = null, hover = false, leaveT = null;
 let settings = {
   theme: 'dark', accent: '#ff4d5e', style: 'notch', mascot: 'mo',
-  trail: true, ttl: 30, login: false, floatPos: null, custom: {},
+  trail: true, ttl: 30, login: false, floatPos: null, custom: {}, boil: false,
 };
-let layout = null, drag = null, interactive = false;
+let layout = null, drag = null, interactive = false, pinned = false;
 let overlayDisplay = null, quitting = false;
 
 const byId = id => history.find(h => h.id === id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const withIcon = i => i && ({ ...i, icon: icons[i.src?.exe] || null });
+const DETECTED = ['lang', 'of', 'url', 'email', 'ext', 'name'];
+const thumbPath = id => path.join(THUMB_DIR, id + '.png');
+const pub = i => i && ({ ...i, thumb: i.kind === 'image' ? pathToFileURL(thumbPath(i.id)).href : undefined });
+const withIcon = i => i && ({ ...pub(i), icon: icons[i.src?.exe] || null });
+const kindGroup = i => i.kind === 'email' ? 'link' : i.kind;
+const sourceKey = i => i.src ? (i.src.site ? 'site:' + i.src.site : i.src.exe ? 'app:' + i.src.exe.toLowerCase() : null) : null;
+
+function classify(item) {
+  if (item.kind === 'image') return item;
+  for (const k of DETECTED) delete item[k];
+  return Object.assign(item, detect(item.text || ''));
+}
 
 function load() {
   try {
     const d = JSON.parse(fs.readFileSync(STORE, 'utf8'));
     history = d.history || [];
     icons = d.icons || {};
+    xp = d.xp || 0;
     settings = { ...settings, ...(d.settings || {}) };
     pouch = (d.pouch || []).filter(id => byId(id));
   } catch {}
+  let migrated = false;
+  for (const item of history) {
+    if (typeof item.thumb === 'string' && item.thumb.startsWith('data:')) {
+      try { fs.writeFileSync(thumbPath(item.id), Buffer.from(item.thumb.split(',')[1], 'base64')); } catch {}
+      delete item.thumb;
+      migrated = true;
+    }
+    classify(item);
+  }
+  if (migrated) save();
 }
 let saveT;
 function save() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => fs.writeFile(STORE, JSON.stringify({ history, pouch, icons, settings }), () => {}), 400);
+  saveT = setTimeout(() => fs.writeFile(STORE, JSON.stringify({ history, pouch, icons, settings, xp }), () => {}), 400);
+}
+
+function level() {
+  let lvl = 1, need = 60, into = xp;
+  while (into >= need) { into -= need; lvl++; need = 60 * lvl; }
+  return { xp, level: lvl, into, need };
+}
+
+function forget(item) {
+  if (item.kind !== 'image') return;
+  fs.unlink(path.join(IMG_DIR, item.id + '.png'), () => {});
+  fs.unlink(thumbPath(item.id), () => {});
 }
 
 let helper = null, helperBuf = '', reqId = 0;
@@ -87,21 +126,12 @@ function onHelper(line) {
   else if (m.type === 'error') clog('[helper]', m.msg);
 }
 
-function classify(text) {
-  const t = text.trim();
-  if (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(t) || /^(rgb|hsl)a?\([^)]*\)$/i.test(t)) return 'color';
-  if (/^https?:\/\/\S+$/i.test(t)) return 'link';
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return 'email';
-  if (t.includes('\n') && /[{};]|=>|\bfunction\b|\bconst\b|\bdef\b|\bimport\b|<\/?\w+>/.test(t)) return 'code';
-  return 'text';
-}
-
 async function readClip() {
   const [entry] = await clipboard.read();
   if (!entry) return null;
   if (entry.types.includes('text/plain')) {
     const text = await (await entry.getType('text/plain')).text();
-    if (text.trim()) return { sig: 't:' + text, kind: classify(text), text: text.slice(0, 20000) };
+    if (text.trim()) return { sig: 't:' + text, kind: 'text', text: text.slice(0, 20000) };
   }
   const type = entry.types.find(t => t.startsWith('image/'));
   if (type) {
@@ -147,14 +177,18 @@ function addItem(clip) {
     if (clip.kind === 'image') {
       const { width, height } = clip.img.getSize();
       item.w = width; item.h = height;
-      item.thumb = clip.img.resize({ width: Math.min(320, width) }).toDataURL();
+      const small = width > 320 ? clip.img.resize({ width: 320, quality: 'best' }) : clip.img;
+      fs.writeFileSync(thumbPath(item.id), small.toPNG());
       fs.writeFile(path.join(IMG_DIR, item.id + '.png'), clip.img.toPNG(), () => {});
-    } else item.text = clip.text;
+    } else {
+      item.text = clip.text;
+      classify(item);
+    }
   }
   history.unshift(item);
-  for (const old of history.splice(MAX_HISTORY)) {
-    if (old.kind === 'image') fs.unlink(path.join(IMG_DIR, old.id + '.png'), () => {});
-    pouch = pouch.filter(id => id !== old.id);
+  for (const old of history.splice(ARCHIVE_MAX)) {
+    if (pouch.includes(old.id)) { history.push(old); continue; }
+    forget(old);
   }
   currentId = item.id;
   if (settings.trail) pushTrail(item.id);
@@ -201,15 +235,52 @@ async function writeItem(item, promote = true) {
 function sendTrail() {
   overlay?.webContents.send('trail', trail.map(byId).filter(Boolean).map(withIcon));
 }
+
+function stats() {
+  const kinds = {}, sources = new Map();
+  for (const i of history) {
+    const k = kindGroup(i);
+    kinds[k] = (kinds[k] || 0) + 1;
+    const key = sourceKey(i);
+    if (!key) continue;
+    const e = sources.get(key) || { key, n: 0, label: i.src.site || i.src.app, site: i.src.site || null, exe: i.src.exe || null };
+    e.n++;
+    sources.set(key, e);
+  }
+  const smart = [...sources.values()].filter(e => e.n >= SMART_MIN && e.n >= history.length * .08).sort((a, b) => b.n - a.n).slice(0, 3);
+  return { total: history.length, kinds, smart };
+}
+
+const hay = new WeakMap();
+function haystack(i) {
+  let h = hay.get(i);
+  if (!h) {
+    h = [i.text, i.kind, i.lang, i.of, i.src?.app, i.src?.site, i.src?.title, i.name, i.kind === 'image' ? `image ${i.w}x${i.h}` : ''].filter(Boolean).join('\n').toLowerCase();
+    hay.set(i, h);
+  }
+  return h;
+}
+
+function query(q = {}) {
+  let list = q.pouch ? pouch.map(byId).filter(Boolean) : history;
+  if (q.kind) list = list.filter(i => kindGroup(i) === q.kind);
+  if (q.source) list = list.filter(i => sourceKey(i) === q.source);
+  const terms = String(q.text || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length) list = list.filter(i => { const h = haystack(i); return terms.every(t => h.includes(t)); });
+  const offset = Math.max(0, q.offset || 0), limit = Math.min(RECENT, q.limit || RECENT);
+  return { total: list.length, offset, items: list.slice(offset, offset + limit).map(pub) };
+}
+
 function broadcast(extra = {}) {
   notch?.webContents.send('state', {
-    history: history.map(withIcon), pouch: pouch.map(byId).filter(Boolean).map(withIcon), current: currentId, ...extra,
+    recent: history.slice(0, RECENT).map(pub), pouch: pouch.map(byId).filter(Boolean).map(pub), current: currentId,
+    stats: stats(), icons, xp: level(), ...extra,
   });
   sendTrail();
 }
 
-function pushTrail(id) {
-  trail = [id, ...trail.filter(x => x !== id)].slice(0, MAX_TRAIL);
+function pushTrail(id, cap = MAX_TRAIL) {
+  trail = [id, ...trail.filter(x => x !== id)].slice(0, cap);
   trailAt.set(id, Date.now());
 }
 function expireTrail() {
@@ -341,6 +412,7 @@ function createWindows() {
 
   notch = makeWindow({ width: NOTCH_W, height: NOTCH_H, x: 0, y: 0 }, 'notch.html');
   notch.setIgnoreMouseEvents(true, { forward: true });
+  notch.on('blur', unpin);
   computeLayout();
 
   menu = makeWindow({ width: MENU_W, height: 460 }, 'paste.html', false);
@@ -412,18 +484,50 @@ function applySettings(patch) {
 
 function setHover(v) {
   hover = v;
+  if (v) rememberFg();
   notch.webContents.send('hover', v);
   if (v && trail.length) absorb();
+  if (!v && pinned) unpin();
 }
 
 function absorb() {
+  const fresh = trail.filter(id => !pouch.includes(id));
+  const eat = fresh.slice(0, Math.max(0, MAX_POUCH - pouch.length));
+  const eaten = trail.filter(id => pouch.includes(id) || eat.includes(id));
+  const full = eat.length < fresh.length;
+  if (!eaten.length) { if (full) broadcast({ full: true }); return; }
   const nb = notch.getBounds(), ob = overlay.getBounds();
-  overlay.webContents.send('absorb', { x: nb.x + layout.bag.x - ob.x, y: nb.y + layout.bag.y - ob.y });
-  pouch = [...trail, ...pouch.filter(id => !trail.includes(id))].slice(0, MAX_POUCH);
-  trail = [];
+  overlay.webContents.send('absorb', { x: nb.x + layout.bag.x - ob.x, y: nb.y + layout.bag.y - ob.y, ids: eaten });
+  pouch = [...eat, ...pouch];
+  const before = level().level;
+  let gain = 0;
+  for (const id of eat) { const it = byId(id); if (it && !it.fed) { it.fed = true; gain += XP_FEED; } }
+  xp += gain;
+  const up = level().level > before ? level().level : 0;
+  trail = trail.filter(id => !eaten.includes(id));
   sendTrail();
   save();
-  setTimeout(() => broadcast({ gulp: true }), 420);
+  setTimeout(() => broadcast({ gulp: eat.length || true, gain, levelUp: up, full }), 420);
+}
+
+let prevFg = null;
+function rememberFg() {
+  if (pinned) return;
+  foreground().then(fg => { if (!pinned && fg?.hwnd && fg.exe?.toLowerCase() !== process.execPath.toLowerCase()) prevFg = fg.hwnd; });
+}
+function pin() {
+  if (pinned) return;
+  pinned = true;
+  notch.setFocusable(true);
+  notch.focus();
+  notch.webContents.focus();
+}
+function unpin() {
+  if (!pinned) return;
+  pinned = false;
+  notch.webContents.send('search-blur');
+  notch.setFocusable(false);
+  if (prevFg) hsend('activate ' + prevFg);
 }
 
 let tickN = 0;
@@ -460,7 +564,7 @@ function tick() {
     clearTimeout(leaveT); leaveT = null;
     if (!hover) setHover(true);
   } else if (hover && !leaveT) {
-    leaveT = setTimeout(() => { leaveT = null; setHover(false); }, 220);
+    leaveT = setTimeout(() => { leaveT = null; setHover(false); }, pinned ? 650 : 220);
   }
   setInteractive(hover || !!inRect(layout.handle));
 }
@@ -491,7 +595,7 @@ function buildTray() {
     { label: 'Shake off trail   Ctrl+Shift+X', click: shakeOff },
     { label: 'Paste menu   Alt+V', click: openMenu },
     { type: 'separator' },
-    { label: 'Clear history', click: () => { history = []; pouch = []; trail = []; save(); broadcast(); } },
+    { label: 'Clear history', click: clearAll },
     { label: 'Quit Rouge', click: () => app.exit(0) },
   ]);
   tray.setContextMenu(menuTpl());
@@ -505,9 +609,18 @@ ipcMain.on('menu-height', (_e, h) => {
   const b = menu.getBounds();
   menu.setBounds({ ...b, height: Math.round(clamp(h, 80, 460)) });
 });
+function clearAll() {
+  for (const h of history) if (!pouch.includes(h.id)) forget(h);
+  history = history.filter(h => pouch.includes(h.id));
+  trail = [];
+  save(); broadcast(); sendTrail();
+}
+
+ipcMain.handle('query', (_e, q) => query(q));
+ipcMain.on('pin', (_e, on) => on ? pin() : unpin());
 ipcMain.on('remove', (_e, id) => {
   const it = byId(id);
-  if (it?.kind === 'image') fs.unlink(path.join(IMG_DIR, id + '.png'), () => {});
+  if (it) forget(it);
   history = history.filter(h => h.id !== id);
   pouch = pouch.filter(p => p !== id);
   trail = trail.filter(t => t !== id);
@@ -528,20 +641,24 @@ ipcMain.on('drag-end', () => {
   save();
 });
 ipcMain.on('empty-pouch', () => { pouch = []; save(); broadcast(); });
+ipcMain.on('unpouch', (_e, id) => { pouch = pouch.filter(p => p !== id); save(); broadcast(); });
 ipcMain.on('carry', () => {
-  for (const id of [...pouch].reverse()) pushTrail(id);
-  pouch = [];
-  save(); broadcast();
+  const items = pouch.map(byId).filter(Boolean);
+  if (!items.length) return;
+  const now = Date.now();
+  items.forEach((it, k) => { it.ts = now - k; });
+  history = [...items, ...history.filter(h => !items.includes(h))];
+  for (const it of [...items].reverse()) pushTrail(it.id, MAX_POUCH);
+  save(); broadcast({ carried: items.length });
 });
-ipcMain.on('clear', () => {
-  for (const h of history) if (h.kind === 'image') fs.unlink(path.join(IMG_DIR, h.id + '.png'), () => {});
-  history = []; pouch = []; trail = []; save(); broadcast();
-});
+ipcMain.on('clear', clearAll);
 
 app.whenReady().then(async () => {
   STORE = path.join(app.getPath('userData'), 'rouge-history.json');
   IMG_DIR = path.join(app.getPath('userData'), 'images');
+  THUMB_DIR = path.join(app.getPath('userData'), 'thumbs');
   fs.mkdirSync(IMG_DIR, { recursive: true });
+  fs.mkdirSync(THUMB_DIR, { recursive: true });
   load();
   const now = await readClip().catch(() => null);
   lastSig = now?.sig ?? null;

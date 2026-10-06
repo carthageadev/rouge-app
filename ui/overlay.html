@@ -109,12 +109,12 @@
   });
 
   rouge.on('absorb', t => {
-    const now = performance.now();
-    order.forEach((id, i) => {
+    const now = performance.now(), eat = t.ids ? order.filter(id => t.ids.includes(id)) : order;
+    eat.forEach((id, i) => {
       const it = items.get(id);
       if (it && it.mode === 'trail') Object.assign(it, { mode: 'absorb', t0: now + i * 55, tx: t.x, ty: t.y });
     });
-    order = [];
+    order = order.filter(id => !eat.includes(id));
   });
 
   rouge.on('shake', () => {

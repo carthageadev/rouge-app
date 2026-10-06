@@ -8,6 +8,11 @@ using System.Windows.Automation;
 public static class RougeHelper
 {
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int k);
@@ -146,6 +151,19 @@ public static class RougeHelper
                "\",\"title\":\"" + Esc(title.ToString()) + "\",\"url\":\"" + Esc(url) + "\"}";
     }
 
+    static void Activate(IntPtr h)
+    {
+        if (!IsWindow(h)) return;
+        uint pid;
+        uint fgThread = GetWindowThreadProcessId(GetForegroundWindow(), out pid);
+        uint me = GetCurrentThreadId();
+        bool attached = fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true);
+        Tap(VK_MASK);
+        BringWindowToTop(h);
+        SetForegroundWindow(h);
+        if (attached) AttachThreadInput(me, fgThread, false);
+    }
+
     static void Paste()
     {
         if (AltDown()) { Tap(VK_MASK); keybd_event(VK_ALT, 0, KEYUP, UIntPtr.Zero); }
@@ -169,6 +187,7 @@ public static class RougeHelper
                     case "fg": Emit("{\"type\":\"fg\",\"id\":" + parts[1] + ",\"info\":" + Foreground() + "}"); break;
                     case "keys": KeysOn = parts.Length > 1 && parts[1] == "1"; break;
                     case "paste": Paste(); break;
+                    case "activate": Activate(new IntPtr(long.Parse(parts[1]))); break;
                 }
             }
             catch (Exception e) { Emit("{\"type\":\"error\",\"msg\":\"" + Esc(e.Message) + "\"}"); }
