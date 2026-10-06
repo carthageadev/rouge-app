@@ -9,7 +9,8 @@ const EXT_LANG = {
   py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', ts: 'typescript', tsx: 'jsx', jsx: 'jsx', cs: 'csharp',
   java: 'java', c: 'cpp', h: 'cpp', cpp: 'cpp', cc: 'cpp', hpp: 'cpp', go: 'go', rs: 'rust', php: 'php', rb: 'ruby', kt: 'kotlin',
   swift: 'swift', sql: 'sql', html: 'html', htm: 'html', css: 'css', scss: 'css', json: 'json', yml: 'yaml', yaml: 'yaml',
-  md: 'markdown', sh: 'shell', bash: 'shell', ps1: 'powershell', lua: 'lua', xml: 'xml', shader: 'cpp', hlsl: 'cpp',
+  md: 'markdown', sh: 'shell', bash: 'shell', ps1: 'powershell', lua: 'lua', xml: 'xml', shader: 'shader', hlsl: 'shader', glsl: 'shader',
+  cginc: 'shader', compute: 'shader', gdshader: 'shader', gd: 'gdscript',
 };
 
 const SHELL_CMDS = 'sudo|apt|apt-get|brew|npm|npx|pnpm|yarn|pip|pip3|git|cd|ls|mkdir|rm|cp|mv|curl|wget|chmod|chown|docker|kubectl|echo|export|source|cat|grep|ssh|scp|make|cargo|node|python|python3|deno|bun|winget|choco|scoop|code|dotnet|flutter|gradle|mvn|go|rustup|conda|ffmpeg|tar|unzip|systemctl|journalctl|nvm|uv';
@@ -44,6 +45,11 @@ const LANGS = {
   powershell: [[/\b(Get|Set|New|Remove|Start|Stop|Write|Invoke|Test|Import|Export|Add|Select|Where|ForEach|Out|Format|Copy|Move)-[A-Z]\w+/, 5], [/\$env:\w+/, 5], [/\s-(ErrorAction|Force|Recurse|Path|Filter)\b/, 3], [/\|\s*(Where|Select|ForEach|Sort)-Object\b/, 4]],
   lua: [[/^\s*local\s+\w+\s*=/m, 3], [/\bfunction\s+[\w.:]+\s*\(.*\)\s*$/m, 2], [/^\s*end\s*$/m, 1], [/^\s*--(\[\[|\s)/m, 2], [/\bthen\b/, 2], [/~=/, 3]],
   dockerfile: [[/^\s*FROM\s+[\w./-]+(:[\w.-]+)?(\s+AS\s+\w+)?\s*$/mi, 5], [/^\s*(RUN|COPY|ADD|WORKDIR|ENV|EXPOSE|CMD|ENTRYPOINT)\s+/m, 3]],
+  gdscript: [[/^extends\s+[\w."/]+\s*$/m, 5], [/^class_name\s+\w+/m, 5], [/^\s*func\s+\w+\s*\(.*\)\s*(->\s*\w+\s*)?:\s*$/m, 4], [/^\s*@(export|onready|tool)\b/m, 5],
+    [/^\s*signal\s+\w+/m, 4], [/\bvar\s+\w+\s*(:\s*\w+\s*)?:?=/, 2], [/\$[A-Z]\w*(\/\w+)*/, 2], [/\b(get_node|queue_free|emit_signal|move_and_slide)\(/, 4], [/\bfunc\s+_(ready|process|physics_process|input)\(/, 5]],
+  shader: [[/^\s*#version\s+\d{3}/m, 5], [/\b(uniform|varying|attribute)\s+\w+\s+\w+\s*;/, 4], [/\bgl_(FragColor|Position|FragCoord|VertexID)\b/, 6], [/\bSV_(Target|Position)\d?\b/, 6],
+    [/\b(float[234]|half[234]|fixed[234]|vec[234]|mat[34]|sampler2D)\b/, 2], [/\bShader\s+"[^"]+"\s*\{/, 6], [/\bSubShader\b/, 5], [/\b(CGPROGRAM|HLSLPROGRAM|ENDCG|ENDHLSL)\b/, 6],
+    [/\b(tex2D|texture2D|SAMPLE_TEXTURE2D|UNITY_MATRIX_MVP|UnityObjectToClipPos)\s*\(/, 4], [/^\s*#pragma\s+(vertex|fragment|kernel)\b/m, 5], [/\b(ALBEDO|NORMAL_MAP|EMISSION|COLOR|UV)\s*=/, 2]],
 };
 
 const ERRORS = [/\berror\s+[A-Z]{1,4}\d{3,5}\b/, /^Traceback \(most recent call last\):/m, /^\s+at\s+[\w$.<>[\]]+\s*\(.*:\d+(:\d+)?\)/m, /\b(TypeError|ReferenceError|SyntaxError|RangeError|ValueError|KeyError|IndexError|AttributeError|ImportError|ModuleNotFoundError|NullReferenceException|InvalidOperationException|NullPointerException|[A-Z]\w*Exception|[A-Z]\w*Error):\s/,
@@ -94,6 +100,26 @@ function errorLang(t) {
   if (/\b(TypeError|ReferenceError|Uncaught)\b|npm ERR!/.test(t)) return 'javascript';
   if (/Exception\b.*\n\s+at\s/.test(t)) return /\.java:\d+/.test(t) ? 'java' : 'csharp';
   return '';
+}
+
+function gameText(t) {
+  if (/^%YAML[^\n]*\r?\n%TAG !u! tag:unity3d\.com/.test(t) || /^--- !u!\d+ &-?\d+/m.test(t) || /^GenericPropertyJSON:\s*\{/.test(t)) return { lang: 'unity' };
+  if (/^\s*Begin (Object|Map|Actor|Level|Surface)\b/m.test(t) && /^\s*End (Object|Map|Actor|Level|Surface)\s*$/m.test(t)) return { lang: 'unreal' };
+  if (/^\[gd_(scene|resource)\b/m.test(t) || (/^\[(node|sub_resource|ext_resource|resource)\b[^\]]*\]\s*$/m.test(t) && /\b(type|name|parent)="/.test(t))) return { lang: 'godot' };
+  if (/^\s*shader_type\s+(spatial|canvas_item|particles|sky|fog)\s*;/m.test(t)) return { lang: 'shader', of: 'Godot shader' };
+  if (/^\s*Shader\s+"[^"]+"\s*\{/.test(t) && /\bSubShader\b/.test(t)) return { lang: 'shader', of: 'Unity shader' };
+  const lines = t.split('\n');
+  const count = re => lines.filter(l => re.test(l)).length;
+  const v = count(/^v\s+-?[\d.]+\s+-?[\d.]+\s+-?[\d.]+/);
+  if (v >= 3 && (count(/^f\s+\d/) || count(/^(vn|vt)\s+-?[\d.]/)) || (v >= 1 && /^(mtllib|usemtl)\s+\S/m.test(t))) return { lang: 'model', of: 'OBJ' };
+  if (/^newmtl\s+\S/m.test(t) && /^\s*(Kd|Ka|Ks|Ns|map_Kd)\s/m.test(t)) return { lang: 'model', of: 'MTL' };
+  if (/^\s*solid\b[^\n]*\r?\n\s*facet normal/i.test(t)) return { lang: 'model', of: 'STL' };
+  if (/^ply\s*\r?\n\s*format\s+(ascii|binary)/.test(t)) return { lang: 'model', of: 'PLY' };
+  if (/^;\s*FBX \d/m.test(t) || /^FBXHeaderExtension:\s*\{/m.test(t)) return { lang: 'model', of: 'FBX' };
+  if (/^#usda \d/.test(t)) return { lang: 'model', of: 'USD' };
+  if (/<COLLADA\b/.test(t)) return { lang: 'model', of: 'DAE' };
+  if (/^\s*\{/.test(t) && /"asset"\s*:\s*\{[^}]*"version"\s*:\s*"2\.0"/.test(t) && /"(meshes|nodes|scenes|accessors)"\s*:/.test(t)) return { lang: 'model', of: 'glTF' };
+  return null;
 }
 
 function asEmail(t) {
@@ -178,6 +204,8 @@ function detect(text) {
     const p = asPath(t);
     if (p) return { kind: 'path', ...p };
   }
+  const game = gameText(t);
+  if (game) return { kind: 'code', ...game };
   const err = errorLang(t);
   if (err !== null) return { kind: 'code', lang: 'error', of: err };
   const lang = codeLang(t);

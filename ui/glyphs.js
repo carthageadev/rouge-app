@@ -8,6 +8,11 @@
   const word = (b, f, t, size = 9, x = 12, y = 15.6, anchor = 'middle', extra = '') =>
     svg(bg(b) + `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="Segoe UI Variable Display,Segoe UI,system-ui" font-weight="800" font-size="${size}" letter-spacing="-.3" fill="${f}" ${extra}>${t}</text>`);
   const mono = (b, f, t, size = 9) => svg(bg(b) + `<text x="12" y="15.4" text-anchor="middle" font-family="Cascadia Code,Consolas,monospace" font-weight="700" font-size="${size}" fill="${f}">${t}</text>`);
+  const cube = c => svg(bg(c) + '<path d="M12 4.2l6.9 3.9v7.8L12 19.8l-6.9-3.9V8.1z" fill="#fff" fill-opacity=".66"/><path d="M12 4.2l6.9 3.9L12 12 5.1 8.1z" fill="#fff"/><path d="M12 12l6.9-3.9v7.8L12 19.8z" fill="#fff" fill-opacity=".4"/>');
+  let sphereN = 0;
+  const sphere = (b, light, dark) => { const id = 'g-sp' + (++sphereN); return svg(bg(b) + `<defs><radialGradient id="${id}" cx=".36" cy=".32" r=".8"><stop offset="0" stop-color="#fff"/><stop offset=".32" stop-color="${light}"/><stop offset="1" stop-color="${dark}"/></radialGradient></defs><circle cx="12" cy="12" r="7.6" fill="url(#${id})"/>`); };
+  const MODEL_TINT = { obj: '#6366f1', fbx: '#2563eb', gltf: '#16a34a', glb: '#16a34a', stl: '#64748b', ply: '#0891b2', usd: '#7c3aed', usda: '#7c3aed', usdc: '#7c3aed', usdz: '#7c3aed',
+    dae: '#ea580c', '3ds': '#0e7490', max: '#0e7490', ma: '#0d9488', mb: '#0d9488', abc: '#475569', c4d: '#1e40af', x3d: '#6366f1', '3mf': '#64748b', mtl: '#db2777' };
   const snake = 'M11.8 2.6c-3.4 0-3.8 1.5-3.8 2.5v1.9h4v.7H5.9C4 7.7 2.6 9.1 2.6 12.1s1.4 4.5 3.3 4.5h1.4v-2.3c0-1.7 1.3-3 3-3h4.2c1.4 0 2.5-1.1 2.5-2.5V5.1c0-1.4-1.1-2.5-5.2-2.5z';
 
   const LANG_ICONS = {
@@ -36,18 +41,44 @@
     lua: () => svg(bg('#ffffff') + '<circle cx="11" cy="13" r="7.4" fill="#000080"/><circle cx="14" cy="10" r="2.1" fill="#fff"/><circle cx="19.3" cy="4.7" r="2.1" fill="#000080"/>'),
     dockerfile: () => svg(bg('#2496ed') + '<g fill="#fff"><rect x="5" y="10" width="2.6" height="2.4"/><rect x="8" y="10" width="2.6" height="2.4"/><rect x="11" y="10" width="2.6" height="2.4"/><rect x="8" y="7.2" width="2.6" height="2.4"/><rect x="11" y="7.2" width="2.6" height="2.4"/><rect x="14" y="10" width="2.6" height="2.4"/></g><path d="M3.6 13.2h15.2c.9-1.6 2.2-1.9 2.6-1.7-.4 2.9-2.6 6-8.4 6-5.2 0-8.3-2-9.4-4.3z" fill="#fff"/>'),
     error: () => svg(bg('#ef4444') + '<path d="M12 4.8l7.6 13.4H4.4z" fill="#fff" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.2v3.6" stroke="#ef4444" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="16.2" r="1.05" fill="#ef4444"/>'),
+    model: item => (item?.of || '').toLowerCase() === 'mtl' ? sphere('#2a1020', '#f9a8d4', '#9d174d') : cube(MODEL_TINT[(item?.of || '').toLowerCase()] || '#6366f1'),
+    unity: () => svg(bg('#1b1b1f') + '<g fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3.6l7.3 4.2v8.4L12 20.4l-7.3-4.2V7.8z"/><path d="M12 12v8.4M12 12l7.3-4.2M12 12L4.7 7.8"/></g>'),
+    unreal: () => svg(bg('#ffffff') + '<circle cx="12" cy="12" r="9.2" fill="#111"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="#fff" stroke-width=".9"/><path d="M9.3 8.2v5.1a2.7 2.7 0 0 0 5.4 0V8.2" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/>'),
+    godot: () => svg(bg('#ffffff') + '<circle cx="7.3" cy="6.4" r="1.6" fill="#478cbf"/><circle cx="16.7" cy="6.4" r="1.6" fill="#478cbf"/><path d="M4.8 9.4c0-2 1.6-3.5 3.5-3.5h7.4c1.9 0 3.5 1.5 3.5 3.5v6.3c0 1.9-1.6 3.4-3.5 3.4H8.3c-1.9 0-3.5-1.5-3.5-3.4z" fill="#478cbf"/><circle cx="9.2" cy="11.8" r="2.4" fill="#fff"/><circle cx="14.8" cy="11.8" r="2.4" fill="#fff"/><circle cx="9.5" cy="12" r="1.15" fill="#414042"/><circle cx="14.5" cy="12" r="1.15" fill="#414042"/><rect x="10.5" y="15.6" width="3" height="1.4" rx=".7" fill="#fff"/>'),
+    shader: () => sphere('#17142a', '#d8b4fe', '#5b21b6'),
   };
+  LANG_ICONS.gdscript = LANG_ICONS.godot;
 
   const LANG_NAMES = { javascript: 'JavaScript', typescript: 'TypeScript', jsx: 'React', python: 'Python', csharp: 'C#', java: 'Java', cpp: 'C / C++', go: 'Go', rust: 'Rust',
     php: 'PHP', ruby: 'Ruby', kotlin: 'Kotlin', swift: 'Swift', sql: 'SQL', html: 'HTML', xml: 'XML', css: 'CSS', json: 'JSON', yaml: 'YAML', markdown: 'Markdown',
-    shell: 'Shell', powershell: 'PowerShell', lua: 'Lua', dockerfile: 'Dockerfile' };
-  const langName = item => item.lang === 'error' ? (LANG_NAMES[item.of] ? LANG_NAMES[item.of] + ' error' : 'Error log') : LANG_NAMES[item.lang] || 'Code';
+    shell: 'Shell', powershell: 'PowerShell', lua: 'Lua', dockerfile: 'Dockerfile', gdscript: 'GDScript', godot: 'Godot scene', unity: 'Unity asset', unreal: 'Unreal',
+    shader: 'Shader', model: '3D model' };
+  const langName = item => item.lang === 'error' ? (LANG_NAMES[item.of] ? LANG_NAMES[item.of] + ' error' : 'Error log')
+    : item.lang === 'model' && item.of ? '3D model · ' + item.of : item.lang === 'shader' && item.of ? item.of : LANG_NAMES[item.lang] || 'Code';
 
   const doc = (label = 'TXT', tint = '#9ea3ad') => svg(`<path d="M6.5 2.5h7.5l4.5 4.5v13a1.5 1.5 0 0 1-1.5 1.5h-10.5A1.5 1.5 0 0 1 5 20V4a1.5 1.5 0 0 1 1.5-1.5z" fill="#fff" stroke="#cfd2d8"/><path d="M14 2.5V7h4.5" fill="#eef0f3" stroke="#cfd2d8" stroke-linejoin="round"/><text x="11.8" y="16.6" text-anchor="middle" font-size="${label.length > 3 ? 4 : 4.8}" font-weight="800" fill="${tint}" font-family="Segoe UI,system-ui">${esc(label)}</text>`, 'g-svg');
   const envelope = svg('<rect x="3" y="6" width="18" height="12.5" rx="2.2" fill="#e8f0fe" stroke="#6f97f2" stroke-width="1.1"/><path d="M3.9 7.2l8.1 6 8.1-6" fill="none" stroke="#6f97f2" stroke-width="1.1" stroke-linejoin="round"/>', 'g-svg');
   const folder = svg('<path d="M3 7a2 2 0 0 1 2-2h4.2l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#e8b22d"/><path d="M3 9.4h18V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#ffd25e"/>', 'g-svg');
   const EXT_TINT = { png: '#e5528a', jpg: '#e5528a', jpeg: '#e5528a', gif: '#e5528a', webp: '#e5528a', svg: '#f08c2a', pdf: '#e0453a', zip: '#a07040', rar: '#a07040', '7z': '#a07040',
     mp4: '#7b61ff', mov: '#7b61ff', mp3: '#18a058', wav: '#18a058', exe: '#4a5568', txt: '#9ea3ad', md: '#2b2b33', json: '#c79a00', cs: '#68217a', js: '#c9a400', ts: '#3178c6', py: '#3776ab' };
+
+  const EXT_CODE = { py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', ts: 'typescript', tsx: 'jsx', jsx: 'jsx', cs: 'csharp', java: 'java',
+    c: 'cpp', h: 'cpp', cpp: 'cpp', cc: 'cpp', hpp: 'cpp', go: 'go', rs: 'rust', php: 'php', rb: 'ruby', kt: 'kotlin', swift: 'swift', sql: 'sql', html: 'html', htm: 'html',
+    css: 'css', scss: 'css', json: 'json', yml: 'yaml', yaml: 'yaml', md: 'markdown', sh: 'shell', bash: 'shell', ps1: 'powershell', lua: 'lua', xml: 'xml', gd: 'gdscript',
+    shader: 'shader', hlsl: 'shader', glsl: 'shader', cginc: 'shader', compute: 'shader', gdshader: 'shader', vert: 'shader', frag: 'shader', dockerfile: 'dockerfile' };
+  const UNITY_EXT = new Set('unity prefab asset mat anim controller unitypackage meta shadergraph shadersubgraph physicmaterial overridecontroller playable mask spriteatlas lighting terrainlayer mixer guiskin flare cubemap rendertexture inputactions'.split(' '));
+  const UNREAL_EXT = new Set('uasset umap uproject uplugin upk udk'.split(' '));
+  const GODOT_EXT = new Set('tscn tres godot escn'.split(' '));
+  const blender = svg(bg('#ffffff') + '<path d="M3.6 10.2h6.4M6.2 5.4l5.6 4.4" stroke="#ea7600" stroke-width="2.3" stroke-linecap="round"/><circle cx="13.6" cy="13.4" r="6.4" fill="#ea7600"/><circle cx="13.6" cy="13.4" r="4" fill="#fff"/><circle cx="13.6" cy="13.4" r="2.3" fill="#265787"/>');
+  function extGlyph(ext) {
+    if (MODEL_TINT[ext]) return LANG_ICONS.model({ of: ext });
+    if (/^blend\d?$/.test(ext)) return blender;
+    if (UNITY_EXT.has(ext)) return LANG_ICONS.unity();
+    if (UNREAL_EXT.has(ext)) return LANG_ICONS.unreal();
+    if (GODOT_EXT.has(ext)) return LANG_ICONS.godot();
+    if (EXT_CODE[ext]) return LANG_ICONS[EXT_CODE[ext]]();
+    return null;
+  }
 
   function favicon(host) {
     if (!host || /^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/.test(host)) return '';
@@ -69,8 +100,8 @@
         return `<div class="g-link" style="--h:${h}">${esc(d.charAt(0).toUpperCase())}${favicon(d)}</div>`;
       }
       case 'email': return envelope;
-      case 'path': return item.ext ? doc(item.ext.toUpperCase().slice(0, 4), EXT_TINT[item.ext] || '#6b7280') : folder;
-      case 'code': return LANG_ICONS[item.lang] ? LANG_ICONS[item.lang]() : `<div class="g-code">&lt;/&gt;</div>`;
+      case 'path': return item.ext ? extGlyph(item.ext) || doc(item.ext.toUpperCase().slice(0, 4), EXT_TINT[item.ext] || '#6b7280') : folder;
+      case 'code': return LANG_ICONS[item.lang] ? LANG_ICONS[item.lang](item) : `<div class="g-code">&lt;/&gt;</div>`;
       default: return doc();
     }
   }
@@ -133,7 +164,11 @@
   kw('css', 'important');
   kw('dockerfile', 'from run copy add workdir env expose cmd entrypoint arg as');
 
-  const HASH = new Set(['python', 'shell', 'ruby', 'yaml', 'powershell', 'dockerfile']);
+  kw('gdscript', 'func var const extends class_name signal enum static return if elif else for while in match pass break continue self null true false and or not is as await preload load super');
+  kw('shader', 'uniform varying attribute in out inout void float int uint bool vec2 vec3 vec4 mat3 mat4 sampler2D float2 float3 float4 half half2 half3 half4 fixed fixed4 return if else for while struct cbuffer Texture2D SamplerState Shader SubShader Pass Properties Tags CGPROGRAM ENDCG HLSLPROGRAM ENDHLSL shader_type render_mode');
+  kw('unreal', 'Begin End Object Class Name Map Actor Level CustomProperties Pin');
+  kw('godot', 'gd_scene gd_resource ext_resource sub_resource node resource connection type name parent');
+  const HASH = new Set(['python', 'shell', 'ruby', 'yaml', 'powershell', 'dockerfile', 'gdscript', 'model', 'unity']);
   const DASH = new Set(['sql', 'lua']);
   const RE_C = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|(\b0x[\da-f]+\b|\b\d[\d_]*(?:\.\d+)?[a-z]*\b|#[0-9a-f]{3,8}\b)|([A-Za-z_$@][\w$-]*)/gi;
   const RE_HASH = /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(\b\d[\d_]*(?:\.\d+)?\b)|([A-Za-z_$@][\w$-]*)/g;
