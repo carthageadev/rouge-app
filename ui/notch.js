@@ -3,7 +3,7 @@ const N = $('notch'), panel = $('panel');
 let data = { recent: [], pouch: [], current: null, stats: { total: 0, kinds: {}, smart: [] }, icons: {}, xp: { level: 1, into: 0, need: 60 } };
 let open = false, freshId = null, shown = [], total = 0, mode = 'main', page = 0, reqToken = 0, trailing = 0;
 const q = { kind: null, source: null, sourceItem: null, pouch: false, text: '' };
-let settings = { theme: 'dark', accent: '#ff4d5e', style: 'notch', mascot: 'mo', trail: true, ttl: 30, login: false };
+let settings = { theme: 'dark', accent: '#ff4d5e', style: 'notch', mascot: 'mo', trail: true, ttl: 30, shake: 'medium', login: false };
 let view = 'grid';
 try { view = localStorage.getItem('rouge.view') || 'grid'; } catch {}
 const PAGE = 40, CAP = 12;
@@ -23,7 +23,7 @@ const TIPS = [
   { keys: ['Alt', 'Scroll'], t: 'Choose what Ctrl V pastes, without leaving your text' },
   { keys: ['Feed'], t: 'Bring copies trailing your cursor here and Rouge keeps them' },
   { keys: ['Click', 'source'], t: 'Click where a clip came from to see everything from there' },
-  { keys: ['Shake'], t: 'Wiggle the mouse fast to fling the trail off' },
+  { keys: ['Shake'], t: 'Shake the mouse to fling the trail off. Set how hard in settings' },
   { keys: ['Carry'], t: 'Carry again empties the pouch onto your cursor. Shake them off or feed them back' },
   { keys: ['Archive'], t: 'Every clip is kept in the archive, searchable and paged' },
   { keys: ['Poke'], t: 'Poke the mascot. Right-click her to dress her up' },

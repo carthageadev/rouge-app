@@ -32,7 +32,7 @@ let currentId = null;
 let lastSig = null, hover = false, leaveT = null;
 let settings = {
   theme: 'dark', accent: '#ff4d5e', style: 'notch', mascot: 'mo',
-  trail: true, ttl: 30, login: false, floatPos: null, custom: {}, boil: false,
+  trail: true, ttl: 30, shake: 'medium', login: false, floatPos: null, custom: {}, boil: false,
 };
 let layout = null, drag = null, interactive = false, pinned = false;
 let hoverAt = 0, feedable = false, overHerAt = 0;
@@ -494,18 +494,21 @@ function shakeOff() {
 
 const shake = { x: { dir: 0, seg: 0, rev: [] }, y: { dir: 0, seg: 0, rev: [] } };
 let prevP = null, lastShake = 0;
+// how far each swing must travel and how many back-and-forths it takes, per sensitivity
+const SHAKE = { high: { seg: 45, revs: 4, win: 750 }, medium: { seg: 80, revs: 5, win: 800 }, low: { seg: 120, revs: 6, win: 850 } };
 function detectShake(p) {
-  const now = Date.now();
+  const now = Date.now(), cfg = SHAKE[settings.shake];
   let hit = false;
+  if (!cfg) { prevP = p; return false; }
   if (prevP) for (const ax of ['x', 'y']) {
     const s = shake[ax], d = p[ax] - prevP[ax], sg = Math.sign(d);
     if (sg && sg !== s.dir) {
-      if (s.seg > 45) s.rev.push(now);
+      if (s.seg > cfg.seg) s.rev.push(now);
       s.dir = sg; s.seg = 0;
     }
     s.seg += Math.abs(d);
-    s.rev = s.rev.filter(t => now - t < 750);
-    if (s.rev.length >= 4) hit = true;
+    s.rev = s.rev.filter(t => now - t < cfg.win);
+    if (s.rev.length >= cfg.revs) hit = true;
   }
   prevP = p;
   if (hit && now - lastShake > 900) {
