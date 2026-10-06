@@ -80,15 +80,24 @@
     return null;
   }
 
+  const AUDIO_TINT = { mp3: '#16a34a', wav: '#2563eb', flac: '#d97706', ogg: '#7c3aed', oga: '#7c3aed', opus: '#0d9488', m4a: '#e11d48', aac: '#db2777',
+    wma: '#475569', aiff: '#c026d3', aif: '#c026d3', mid: '#ca8a04', midi: '#ca8a04', alac: '#ea580c', ape: '#64748b' };
   const GROUPS = {
     image: ['png jpg jpeg gif webp bmp tif tiff heic avif ico svg jfif', () => svg(bg('#ec4899') + '<path d="M4.6 17.6l4.6-5.7 3.2 3.9 2.3-2.8 4.8 4.6z" fill="#fff"/><circle cx="15.6" cy="8.2" r="1.9" fill="#fff"/>')],
     video: ['mp4 mov mkv avi webm wmv m4v flv mpg mpeg', () => svg(bg('#7c3aed') + '<rect x="4.6" y="6.6" width="14.8" height="10.8" rx="2.4" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M10.4 9.5v5l4.2-2.5z" fill="#fff"/>')],
-    audio: ['mp3 wav flac ogg m4a aac opus wma aiff mid midi', () => svg(bg('#16a34a') + '<path d="M10 16.4V7.7l7-1.6v8.6" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.3" cy="16.6" r="2" fill="#fff"/><circle cx="15.3" cy="14.8" r="2" fill="#fff"/>')],
+    audio: ['mp3 wav flac ogg oga m4a aac opus wma aiff aif mid midi alac ape', ext => {
+      const c = AUDIO_TINT[ext] || '#16a34a', label = (ext === 'midi' ? 'mid' : ext === 'aif' ? 'aiff' : ext).toUpperCase();
+      return svg(bg(c) + '<path d="M10.4 12.4V5.9l5.2-1.2v6.3" fill="none" stroke="#fff" stroke-width="1.45" stroke-linejoin="round"/><circle cx="9.1" cy="12.5" r="1.55" fill="#fff"/><circle cx="14.3" cy="11.1" r="1.55" fill="#fff"/>'
+        + `<text x="12" y="20.4" text-anchor="middle" font-family="Segoe UI,system-ui" font-weight="800" font-size="${label.length > 3 ? 5 : 5.8}" letter-spacing=".2" fill="#fff">${label}</text>`);
+    }],
     pdf: ['pdf', () => word('#e0453a', '#fff', 'PDF', 7.4)],
     word: ['doc docx odt rtf pages', () => word('#2b579a', '#fff', 'W', 11)],
     sheet: ['xls xlsx xlsm csv tsv ods numbers', () => word('#217346', '#fff', 'X', 11)],
     slides: ['ppt pptx odp key', () => word('#d24726', '#fff', 'P', 11)],
-    archive: ['zip rar 7z tar gz tgz bz2 xz iso dmg cab', () => svg(bg('#a16207') + '<path d="M12 3.6v7.6" stroke="#fff" stroke-width="2.4" stroke-dasharray="1.6 1.4"/><rect x="9.6" y="11.4" width="4.8" height="6" rx="1.2" fill="#fff"/><rect x="11.1" y="13.8" width="1.8" height="1.6" fill="#a16207"/>')],
+    archive: ['zip tar gz tgz bz2 xz iso dmg cab zst lz', () => svg(bg('#e9a23b') + '<path d="M12 3.6v7.6" stroke="#fff" stroke-width="2.4" stroke-dasharray="1.6 1.4"/><rect x="9.6" y="11.4" width="4.8" height="6" rx="1.2" fill="#fff"/><rect x="11.1" y="13.8" width="1.8" height="1.6" fill="#e9a23b"/>')],
+    rar: ['rar', () => svg(bg('#ffffff') + '<rect x="3.8" y="4.4" width="16.4" height="4.6" rx="1.2" fill="#d6338a"/><rect x="3.8" y="9.7" width="16.4" height="4.6" rx="1.2" fill="#2a9fd8"/><rect x="3.8" y="15" width="16.4" height="4.6" rx="1.2" fill="#6b3fa0"/>'
+      + '<path d="M17 5.6h2v2.2h-2zM17 10.9h2v2.2h-2zM17 16.2h2v2.2h-2z" fill="#fff" opacity=".75"/><rect x="10.3" y="3.4" width="3.4" height="17.2" rx=".7" fill="#8a5a2b"/><rect x="9.8" y="10.4" width="4.4" height="3.2" rx=".6" fill="none" stroke="#f2c14e" stroke-width="1.1"/>')],
+    sevenz: ['7z', () => svg(bg('#121214') + '<text x="12" y="16.4" text-anchor="middle" font-family="Segoe UI,system-ui" font-weight="900" fill="#fff" letter-spacing="-.6"><tspan font-size="12.5">7</tspan><tspan font-size="9.5">z</tspan></text>')],
     font: ['ttf otf woff woff2 fon', () => svg(bg('#334155') + '<text x="12" y="16.2" text-anchor="middle" font-family="Georgia,serif" font-size="11" font-weight="700" fill="#fff">Aa</text>')],
     text: ['txt log ini cfg conf env toml nfo', () => svg(bg('#ffffff') + '<path d="M6.5 7.5h11M6.5 10.5h11M6.5 13.5h11M6.5 16.5h7" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>')],
     psd: ['psd psb', () => word('#001e36', '#31a8ff', 'Ps', 10)],
@@ -96,7 +105,7 @@
   };
   const TYPE_OF = {};
   for (const [k, [exts]] of Object.entries(GROUPS)) for (const e of exts.split(' ')) TYPE_OF[e] = k;
-  const typeGlyph = ext => TYPE_OF[ext] ? GROUPS[TYPE_OF[ext]][1]() : null;
+  const typeGlyph = ext => TYPE_OF[ext] ? GROUPS[TYPE_OF[ext]][1](ext) : null;
 
   // grey for a handful, warming through yellow and orange to red by fifty
   function countTone(n) {
