@@ -53,7 +53,12 @@
   function favicon(host) {
     if (!host || /^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/.test(host)) return '';
     const alt = `https://${esc(host)}/favicon.ico`;
-    return `<img class="g-fav" src="https://${esc(host)}/apple-touch-icon.png" data-alt="${alt}" alt="" draggable="false" onload="this.parentNode.classList.add('fav-on')" onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt=''}else this.remove()">`;
+    return `<img class="g-fav" src="https://${esc(host)}/apple-touch-icon.png" data-alt="${alt}" alt="" draggable="false" onload="Rouge.favOn(this)" onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt=''}else this.remove()">`;
+  }
+
+  function favOn(img) {
+    img.parentNode.classList.add('fav-on');
+    if (img.dataset.alt && img.naturalWidth >= 57 && Math.abs(img.naturalWidth - img.naturalHeight) < 4) img.classList.add('full');
   }
 
   function tile(item) {
@@ -144,5 +149,5 @@
     return out + esc(code.slice(last));
   }
 
-  window.Rouge = { tile, esc, domain, hue, srcIcon, srcName, srcKey, preview, langName, highlight, LANG_NAMES };
+  window.Rouge = { tile, favOn, esc, domain, hue, srcIcon, srcName, srcKey, preview, langName, highlight, LANG_NAMES };
 })();

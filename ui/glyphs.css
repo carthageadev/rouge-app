@@ -9,7 +9,8 @@
   font: 700 13px/1 "Segoe UI Variable Display", "Segoe UI", system-ui;
 }
 .g-link.fav-on { background: #fff; color: transparent; }
-.g-fav { position: absolute; inset: 14%; width: 72%; height: 72%; object-fit: contain; display: block; border-radius: 18%; }
+.g-link > .g-fav { position: absolute; inset: 0; margin: auto; width: 70%; height: 70%; max-width: none; object-fit: contain; display: block; border-radius: 18%; }
+.g-link > .g-fav.full { width: 100%; height: 100%; border-radius: 0; object-fit: cover; }
 .g-code {
   position: absolute; inset: 0; display: grid; place-items: center;
   background: #16161a; color: #ff6b7a; font: 700 10px/1 "Cascadia Code", Consolas, monospace; letter-spacing: -.5px;
