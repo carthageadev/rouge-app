@@ -6,6 +6,7 @@
     rib: ['Part128'],
     placket: ['Part129'],
     collar: ['Part124'],
+    bow: ['Part125'],
     collarBack: ['Part135'],
     skirt: ['Part132'],
     sleeveL: ['ArtMesh403_Skinning', 'ArtMesh404_Skinning', 'ArtMesh405_Skinning', 'ArtMesh406_Skinning'],
@@ -190,7 +191,6 @@
     }
 
     let busy = Promise.resolve();
-    const FRONT = ['rib', 'placket', 'collar', 'collarBack'];
     function clearTris(ctx, tris) {
       ctx.save();
       ctx.beginPath();
@@ -224,7 +224,7 @@
         const jobs = [];
         for (const [k, p] of Object.entries(pieces)) {
           if ((k === 'legs' || k === 'neck') && !design.pieces[k]) continue;
-          const spec = k in design.pieces ? design.pieces[k] : k === 'body' || FRONT.includes(k) ? design.pieces.torso : null;
+          const spec = k in design.pieces ? design.pieces[k] : k === 'body' ? design.pieces.torso : null;
           const key = spec && spec === design.pieces.torso ? 'torso' : k;
           jobs.push({ p, spec, key, fill: spec && await img(key + ':fill', spec.fill && doc(spec.fill, defs)), keep: spec && await img(key + ':keep', spec.keep && doc(spec.keep, defs, KH), KH) });
         }
