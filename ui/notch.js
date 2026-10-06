@@ -213,8 +213,8 @@ function card(item, i) {
       return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(user)}</div><div class="path">@${Rouge.esc(host || '')}</div></div>${meta('email')}${xBtn(item)}${done}</div>`;
     }
     case 'path': {
-      const dir = t.trim().slice(0, Math.max(0, t.trim().length - (item.name || '').length)).replace(/[\\/]+$/, '');
-      return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || t)}</div><div class="path">${Rouge.esc(dir)}</div></div>${meta(item.ext ? 'file' : 'folder')}${xBtn(item)}${done}</div>`;
+      const more = item.count > 1 ? `<span class="more">+${item.count - 1}</span>` : '';
+      return `${head}<div class="body"><div class="fav">${Rouge.tile(item)}</div><div class="dom">${Rouge.esc(item.name || t)}${more}</div><div class="path">${Rouge.esc(item.dir ?? '')}</div></div>${meta(item.count > 1 ? item.count + ' paths' : item.ext ? 'file' : 'folder')}${xBtn(item)}${done}</div>`;
     }
     case 'code':
       return `${head}<div class="body">${codeHead(item)}<div class="code">${codeBody(item, 500)}</div></div>${meta('code')}${xBtn(item)}${done}</div>`;

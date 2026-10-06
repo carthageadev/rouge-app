@@ -108,14 +108,55 @@ function asUrl(t) {
   return null;
 }
 
-function asPath(t) {
-  if (t.includes('\n') || t.length > 400) return null;
-  const win = /^[a-z]:[\\/]/i.test(t) || /^\\\\[\w.$-]+\\/.test(t) || /^%\w+%[\\/]/.test(t);
-  const nix = /^(~|\.{1,2})?\/[^\s/]+(\/[^\s/]*)+$/.test(t) || /^~\/\S*$/.test(t);
+const OPEN_Q = '"\'`“‘«', CLOSE_Q = '"\'`”’»';
+function unquote(t) {
+  let s = t.trim(), quoted = false;
+  for (let k = 0; k < 3 && s.length > 1; k++) {
+    const a = OPEN_Q.indexOf(s[0]), b = CLOSE_Q.indexOf(s[s.length - 1]);
+    if (a >= 0 && b >= 0) s = s.slice(1, -1).trim();
+    else if (a >= 0) s = s.slice(1).trim();
+    else if (b >= 0 && /^([a-z]:|\\\\|%\w+%|~?\/)/i.test(s)) s = s.slice(0, -1).trim();
+    else break;
+    quoted = true;
+  }
+  return { s, quoted };
+}
+
+function fromFileUrl(t) {
+  const m = t.match(/^file:\/\/([^/]*)(\/.*)$/i);
+  if (!m) return null;
+  let p;
+  try { p = decodeURIComponent(m[2]); } catch { p = m[2]; }
+  if (m[1] && m[1].toLowerCase() !== 'localhost') return '\\\\' + m[1] + p.replace(/\//g, '\\');
+  return /^\/[a-z]:/i.test(p) ? p.slice(1) : p;
+}
+
+function onePath(raw) {
+  if (raw.length > 400) return null;
+  let { s: t, quoted } = unquote(raw);
+  if (/^file:\/\//i.test(t)) { t = fromFileUrl(t); quoted = true; if (!t) return null; }
+  if (/^\\\\\?\\[a-z]:\\/i.test(t)) t = t.slice(4);
+  const win = /^[a-z]:([\\/]|$)/i.test(t) || /^\\\\[^\\/\s]+[\\/][^\\/]/.test(t) || /^%\w+%([\\/]|$)/.test(t);
+  const nix = !win && (quoted ? /^(~|\.{1,2})?\/[^/]+(\/[^/]*)+$/.test(t) : /^(~|\.{1,2})?\/[^\s/]+(\/[^\s/]*)+$/.test(t) || /^~\/\S*$/.test(t));
   if (!win && !nix) return null;
-  const name = t.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
-  const ext = (name.match(/\.([a-z0-9]{1,8})$/i) || [])[1];
-  return { name, ext: ext ? ext.toLowerCase() : '' };
+  if (win && /[<>"|?*\t]/.test(t.slice(2))) return null;
+  const at = t.match(/\.[a-z0-9]{1,8}(:\d+(:\d+)?|\(\d+(,\d+)?\))$/i);
+  const p = at ? t.slice(0, t.length - at[1].length) : t;
+  const bare = /^[a-z]:[\\/]?$/i.test(p) ? p.slice(0, 2) : p.replace(/[\\/]+$/, '');
+  const name = bare.split(/[\\/]/).pop() || bare;
+  const ext = bare.length > 2 ? (name.match(/\.([a-z0-9]{1,8})$/i) || [])[1] : '';
+  const out = { path: p, name, dir: bare.slice(0, bare.length - name.length).replace(/[\\/]+$/, ''), ext: ext ? ext.toLowerCase() : '' };
+  if (at) out.line = at[1].replace(/[^\d,:]/g, '').replace(/^:/, '').replace(',', ':');
+  return out;
+}
+
+function asPath(t) {
+  if (!t.includes('\n')) return onePath(t);
+  const lines = t.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length > 200) return null;
+  const all = lines.map(onePath);
+  if (all.some(p => !p)) return null;
+  return all.length === 1 ? all[0] : { ...all[0], count: all.length, paths: all.map(p => p.path) };
 }
 
 function detect(text) {
@@ -126,8 +167,11 @@ function detect(text) {
   if (single) {
     const email = asEmail(t);
     if (email) return { kind: 'email', email };
+    const p = asPath(t);
+    if (p) return { kind: 'path', ...p };
     const url = asUrl(t);
     if (url) return { kind: 'link', url };
+  } else {
     const p = asPath(t);
     if (p) return { kind: 'path', ...p };
   }

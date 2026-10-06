@@ -36,7 +36,7 @@ let overlayDisplay = null, quitting = false;
 
 const byId = id => history.find(h => h.id === id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const DETECTED = ['lang', 'of', 'url', 'email', 'ext', 'name'];
+const DETECTED = ['lang', 'of', 'url', 'email', 'ext', 'name', 'path', 'dir', 'line', 'count', 'paths'];
 const thumbPath = id => path.join(THUMB_DIR, id + '.png');
 const pub = i => i && ({ ...i, thumb: i.kind === 'image' ? pathToFileURL(thumbPath(i.id)).href : undefined });
 const withIcon = i => i && ({ ...pub(i), icon: icons[i.src?.exe] || null });
