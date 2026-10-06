@@ -45,8 +45,8 @@
   };
 
   const OUTFITS = {
-    school: { label: 'School', swatch: '#f4f4f6' },
-    ...Object.fromEntries(Object.entries(Wardrobe.DESIGNS).map(([k, d]) => [k, { label: d.label, swatch: d.swatch, design: d }])),
+    school: { label: 'Classic', colors: [] },
+    ...Object.fromEntries(Object.entries(Wardrobe.DESIGNS).map(([k, d]) => [k, { label: d.label, colors: d.colors }])),
   };
 
   const nums = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => [a + i, String(a + i)]);
@@ -76,21 +76,21 @@
   ];
 
   const FORMS = {
-    mo: { name: 'Mo', p: { Param19: 1, Param74: 3 }, hair: 'ink', eye: 'ink', skin: 'porcelain', outfit: 'school',
+    mo: { name: 'Mo', p: { Param19: 1, Param74: 3 }, hair: 'ink', eye: 'ink', skin: 'porcelain', outfit: 'school', outfitColor: 0,
       taps: ['Hehe~', 'Copied & carried!', 'Need a paste?', 'Boop!', 'Mm?'], mad: ['Hey!!', 'Stop poking!', 'Mou~!!'] },
-    rouge: { name: 'Rouge', p: { Param19: 1, Param74: 3, Param194: 1 }, hair: 'rouge', eye: 'ruby', skin: 'warm', outfit: 'varsity',
+    rouge: { name: 'Rouge', p: { Param19: 1, Param74: 3, Param194: 1 }, hair: 'rouge', eye: 'ruby', skin: 'warm', outfit: 'varsity', outfitColor: 1,
       taps: ['Rouge on duty ♥', 'Copied & carried!', 'Need a paste?', 'Hehe~'], mad: ['Mou~!!', 'Stop poking!', 'Hmph!!'] },
-    momo: { name: 'Momo', p: { Param131: 1, Param134: 1, Param128: 2, Param74: 3 }, hair: 'sakura', eye: 'amethyst', skin: 'rosy', outfit: 'idol',
+    momo: { name: 'Momo', p: { Param131: 1, Param134: 1, Param128: 2, Param74: 3 }, hair: 'sakura', eye: 'amethyst', skin: 'rosy', outfit: 'sundress', outfitColor: 3,
       taps: ['Kyaa~', 'Twin tails!', 'Ehehe ♡', 'Boing boing'], mad: ['Meanie!!', 'Hmph!', 'No touching!'] },
-    sunny: { name: 'Sunny', p: { Param117: 4, Param209: 1, Param211: 1, Param74: 1 }, hair: 'honey', eye: 'azure', skin: 'warm', outfit: 'marine',
+    sunny: { name: 'Sunny', p: { Param117: 4, Param209: 1, Param211: 1, Param74: 1 }, hair: 'honey', eye: 'azure', skin: 'warm', outfit: 'overalls', outfitColor: 0,
       taps: ['Good morning!', 'Sunshine~', 'Yay!', 'Copy that!'], mad: ['Hey now!', 'Rude!!', 'Grr~'] },
-    mint: { name: 'Mint', p: { Param131: 3, Param134: 3, Param74: 3 }, hair: 'mint', eye: 'jade', skin: 'warm', outfit: 'hoodie',
+    mint: { name: 'Mint', p: { Param131: 3, Param134: 3, Param74: 3 }, hair: 'mint', eye: 'jade', skin: 'warm', outfit: 'hoodie', outfitColor: 2,
       taps: ['Fresh copy!', 'Odango power!', 'Hi hi~', 'Sparkly!'], mad: ['Meanie!', 'No more!!', 'Grr~'] },
-    yoru: { name: 'Yoru', p: { Param151: 1, Param2: 1, Param20: 3 }, hair: 'night', eye: 'amber', skin: 'warm', outfit: 'maid',
+    yoru: { name: 'Yoru', p: { Param151: 1, Param2: 1, Param20: 3 }, hair: 'night', eye: 'amber', skin: 'warm', outfit: 'maid', outfitColor: 0,
       taps: ['…nya?', 'Stargazing~', 'Purr…', 'Night mode ✦'], mad: ['Fshhh!', 'Nya!!', 'Leave me be!'] },
-    golshi: { name: 'Golshi', p: { Param151: 7, Param19: 5, Param74: 3 }, hair: 'silver', eye: 'violet', skin: 'warm', outfit: 'sailor',
+    golshi: { name: 'Golshi', p: { Param151: 7, Param19: 5, Param74: 3 }, hair: 'silver', eye: 'violet', skin: 'warm', outfit: 'sailor', outfitColor: 0,
       taps: ['Wanna see a dropkick?', 'Full sail!', 'Yakisoba time!', 'Pakapuu~'], mad: ['HEY!!', 'Dropkick incoming!', 'Stop that!!'] },
-    kuri: { name: 'Kuri', p: { Param117: 3, Param19: 2, Param74: 3 }, hair: 'cocoa', eye: 'forest', skin: 'warm', outfit: 'cardigan',
+    kuri: { name: 'Kuri', p: { Param117: 3, Param19: 2, Param74: 3 }, hair: 'cocoa', eye: 'forest', skin: 'warm', outfit: 'knit', outfitColor: 0,
       taps: ['Autumn vibes~', 'Braids!', 'Tea time?', 'Hehe'], mad: ['Hey!', 'Stop it!', 'Hmph!'] },
   };
 
@@ -101,8 +101,14 @@
   }
   const look = (formKey, custom, k) => {
     const v = custom && custom[k], sets = { hair: HAIR_COLORS, eye: EYE_COLORS, skin: SKIN_TONES, outfit: OUTFITS };
+    if (k === 'outfitColor') {
+      const fit = look(formKey, custom, 'outfit'), n = (OUTFITS[fit]?.colors || []).length;
+      const c = Number.isInteger(v) ? v : fit === FORMS[formKey].outfit ? FORMS[formKey].outfitColor || 0 : 0;
+      return n ? Math.max(0, Math.min(c, n - 1)) : 0;
+    }
     return v && (!sets[k] || sets[k][v]) ? v : FORMS[formKey][k];
   };
+  const hex = c => '#' + (c || [1, 1, 1]).map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
 
   const FACES = {
     normal: {},
@@ -229,8 +235,9 @@
         } else for (const g of ['front', 'back', 'streak', 'ears']) paint(groups[g]);
         paint(groups.eye, null, e.c);
         paint(groups.skin, sk.c);
-        const outfit = look(form, custom, 'outfit');
-        if (wardrobe && outfit !== wearing) { wearing = outfit; wardrobe.apply(OUTFITS[outfit]?.design || null, styleParams); }
+        const outfit = look(form, custom, 'outfit'), color = look(form, custom, 'outfitColor'), tone = hex(sk.c);
+        const sig = outfit + ':' + color + ':' + tone;
+        if (wardrobe && sig !== wearing) { wearing = sig; wardrobe.apply(Wardrobe.build(outfit, color, tone), styleParams); }
       };
       applyColors();
       Outfits.prepare(model, app.renderer).then(w => { wardrobe = w; wearing = null; applyColors(); }).catch(e => console.error('[outfit]', e));

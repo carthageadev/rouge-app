@@ -103,9 +103,13 @@ function renderCustom() {
         `<div class="c-opt${val === v ? ' on' : ''}" data-k="${item.key}" data-v="${val}">${lbl}</div>`).join('')}</div></div>`;
     }).join('');
   } else if (custTab === 'Outfit') {
-    const cur = Mascot.look(f, c, 'outfit');
+    const cur = Mascot.look(f, c, 'outfit'), col = Mascot.look(f, c, 'outfitColor'), ways = Mascot.OUTFITS[cur].colors;
+    const dots = cw => Object.values(cw.c).filter(v => typeof v === 'string' && v.startsWith('#')).slice(0, 3);
+    const swatch = cw => { const d = dots(cw); return d.length > 1 ? `conic-gradient(${d.map((x, i) => `${x} ${i / d.length * 360}deg ${(i + 1) / d.length * 360}deg`).join(',')})` : d[0]; };
     html = `<div class="c-row"><div class="c-lbl">Outfit</div><div class="c-opts">${Object.entries(Mascot.OUTFITS).map(([k, o]) =>
-      `<div class="c-fit${k === cur ? ' on' : ''}" data-k="outfit" data-v="${k}"><i style="background-image:url(../assets/live2d/outfits/${k}.png)"></i>${o.label}</div>`).join('')}</div></div>`;
+      `<div class="c-fit${k === cur ? ' on' : ''}" data-k="outfit" data-v="${k}"><i style="background-image:url(../assets/live2d/outfits/${k}.png)"></i>${o.label}</div>`).join('')}</div></div>`
+      + (ways.length ? `<div class="c-row"><div class="c-lbl">Colourway</div><div class="c-opts">${ways.map((cw, i) =>
+        `<div class="c-sw${i === col ? ' on' : ''}" data-k="outfitColor" data-v="${i}"><i style="background:${swatch(cw)}"></i>${cw.name}</div>`).join('')}</div></div>` : '');
   } else {
     const sw = (key, label, set) => {
       const cur = Mascot.look(f, c, key);
@@ -128,6 +132,7 @@ $('custBody').addEventListener('click', e => {
   if (!o) return;
   const v = o.dataset.v, c = myCustom();
   c[o.dataset.k] = /^-?\d+$/.test(v) ? +v : v;
+  if (o.dataset.k === 'outfit') delete c.outfitColor;
   saveCustom(c);
 });
 $('custReset').onclick = () => saveCustom({});
