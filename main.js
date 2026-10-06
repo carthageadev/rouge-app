@@ -23,6 +23,7 @@ const BROWSERS = /^(chrome|msedge|brave|vivaldi|opera|firefox|arc|thorium|chromi
 let STORE, IMG_DIR, THUMB_DIR;
 let overlay, notch, menu, tray;
 let history = [], trail = [], pouch = [], icons = {}, xp = 0;
+const held = new Set();
 const trailAt = new Map();
 let currentId = null;
 let lastSig = null, hover = false, leaveT = null;
@@ -281,13 +282,14 @@ function broadcast(extra = {}) {
   sendTrail();
 }
 
-function pushTrail(id, cap = MAX_TRAIL) {
-  trail = [id, ...trail.filter(x => x !== id)].slice(0, cap);
+function pushTrail(id) {
+  let free = 0;
+  trail = [id, ...trail.filter(x => x !== id)].filter(x => held.has(x) || ++free <= MAX_TRAIL);
   trailAt.set(id, Date.now());
 }
 function expireTrail() {
   const now = Date.now();
-  const kept = trail.filter(id => now - (trailAt.get(id) || 0) < settings.ttl * 1000);
+  const kept = trail.filter(id => held.has(id) || now - (trailAt.get(id) || 0) < settings.ttl * 1000);
   if (kept.length !== trail.length) { trail = kept; sendTrail(); }
 }
 
@@ -295,6 +297,7 @@ function shakeOff() {
   if (!trail.length) return;
   overlay.webContents.send('shake');
   trail = [];
+  held.clear();
   sendTrail();
 }
 
@@ -509,6 +512,7 @@ function absorb() {
   xp += gain;
   const up = level().level > before ? level().level : 0;
   trail = trail.filter(id => !eaten.includes(id));
+  for (const id of eaten) held.delete(id);
   sendTrail();
   save();
   setTimeout(() => broadcast({ gulp: eat.length || true, gain, levelUp: up, full }), 420);
@@ -622,6 +626,7 @@ function clearAll() {
   for (const h of history) if (!pouch.includes(h.id)) forget(h);
   history = history.filter(h => pouch.includes(h.id));
   trail = [];
+  held.clear();
   save(); broadcast(); sendTrail();
 }
 
@@ -634,6 +639,7 @@ ipcMain.on('remove', (_e, id) => {
   history = history.filter(h => h.id !== id);
   pouch = pouch.filter(p => p !== id);
   trail = trail.filter(t => t !== id);
+  held.delete(id);
   save(); broadcast();
 });
 ipcMain.on('settings-set', (_e, patch) => applySettings(patch));
@@ -658,7 +664,8 @@ ipcMain.on('carry', () => {
   const now = Date.now();
   items.forEach((it, k) => { it.ts = now - k; });
   history = [...items, ...history.filter(h => !items.includes(h))];
-  for (const it of [...items].reverse()) pushTrail(it.id, MAX_POUCH);
+  for (const it of [...items].reverse()) { held.add(it.id); pushTrail(it.id); }
+  pouch = [];
   save(); broadcast({ carried: items.length });
 });
 ipcMain.on('clear', clearAll);

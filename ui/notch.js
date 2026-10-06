@@ -23,6 +23,7 @@ const TIPS = [
   { keys: ['Feed'], t: 'Bring copies trailing your cursor here and Rouge keeps them' },
   { keys: ['Click', 'source'], t: 'Click where a clip came from to see everything from there' },
   { keys: ['Shake'], t: 'Wiggle the mouse fast to fling the trail off' },
+  { keys: ['Carry'], t: 'Carry again empties the pouch onto your cursor. Shake them off or feed them back' },
   { keys: ['Archive'], t: 'Every clip is kept in the archive, searchable and paged' },
   { keys: ['Poke'], t: 'Poke the mascot. Right-click her to dress her up' },
   { keys: ['⚙'], t: 'Themes, accent colour and a floating notch live in settings' },
@@ -164,7 +165,7 @@ function renderPouch(ev = {}) {
   $('pouchSub').textContent = trailing && open && !full ? `Bring your trail onto ${who} to feed her.`
     : !p.length ? 'Copies trail your cursor. Bring them onto her to keep them.'
     : full ? 'Full. Take something out to feed her more.'
-    : `${p.length === 1 ? 'One clip' : p.length + ' clips'} kept safe. Carry them out any time.`;
+    : `${p.length === 1 ? 'One clip' : p.length + ' clips'} kept safe. Carry them out onto your cursor any time.`;
   $('carry').disabled = !p.length;
   $('openPouch').disabled = !p.length && !q.pouch;
   $('openPouch').classList.toggle('on', q.pouch);
