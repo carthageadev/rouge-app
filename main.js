@@ -6,7 +6,9 @@ const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 const { detect } = require('./detect');
 
-if (!app.requestSingleInstanceLock()) app.quit();
+if (!app.requestSingleInstanceLock()) app.exit(0);
+// transparent always-on-top windows can get wrongly marked as covered and stop painting mid-animation
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 
 const ARCHIVE_MAX = 5000;
 const RECENT = 100;
@@ -57,16 +59,25 @@ function classify(item) {
   return Object.assign(item, detect(item.text || ''));
 }
 
+function readStore() {
+  for (const file of [STORE, STORE + '.bak']) {
+    try { const d = JSON.parse(fs.readFileSync(file, 'utf8')); if (d && Array.isArray(d.history)) return { d, file }; } catch {}
+  }
+  return null;
+}
 function load() {
-  try {
-    const d = JSON.parse(fs.readFileSync(STORE, 'utf8'));
-    history = d.history || [];
+  const got = readStore();
+  if (!got && fs.existsSync(STORE)) try { fs.renameSync(STORE, STORE + '.corrupt-' + Date.now()); } catch {}
+  if (got) {
+    const { d, file } = got;
+    history = d.history.filter(h => h && h.id && h.kind);
     icons = d.icons || {};
     ficons = d.ficons || {};
     xp = d.xp || 0;
     settings = { ...settings, ...(d.settings || {}) };
     pouch = (d.pouch || []).filter(id => byId(id));
-  } catch {}
+    if (file === STORE) try { fs.copyFileSync(STORE, STORE + '.bak'); } catch {}
+  }
   let migrated = false;
   for (const item of history) {
     if (typeof item.thumb === 'string' && item.thumb.startsWith('data:')) {
@@ -78,10 +89,28 @@ function load() {
   }
   if (migrated) save();
 }
-let saveT;
+// write to a temp file and swap it in, so a crash mid-save never leaves a broken history
+let saveT, writing = false, again = false;
+const snapshot = () => JSON.stringify({ history, pouch, icons, ficons, settings, xp });
 function save() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => fs.writeFile(STORE, JSON.stringify({ history, pouch, icons, ficons, settings, xp }), () => {}), 400);
+  saveT = setTimeout(flush, 400);
+}
+function flush() {
+  saveT = null;
+  if (writing) { again = true; return; }
+  writing = true;
+  const tmp = STORE + '.tmp';
+  fs.writeFile(tmp, snapshot(), err => {
+    const done = () => { writing = false; if (again) { again = false; flush(); } };
+    if (err) return done();
+    fs.rename(tmp, STORE, done);
+  });
+}
+function flushNow() {
+  if (!STORE || (!saveT && !writing && !again)) return;
+  clearTimeout(saveT);
+  try { fs.writeFileSync(STORE + '.qtmp', snapshot()); fs.renameSync(STORE + '.qtmp', STORE); } catch {}
 }
 
 function level() {
@@ -100,7 +129,9 @@ let helper = null, helperBuf = '', reqId = 0;
 
 const clog = (...a) => { try { console.error(...a); } catch {} };
 const pending = new Map();
+let helperFails = 0, helperAt = 0;
 function startHelper() {
+  helperAt = Date.now();
   helper = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'native', 'helper.ps1')], { windowsHide: true });
   for (const s of [helper.stdin, helper.stdout, helper.stderr]) s.on('error', () => {});
   helper.stdout.setEncoding('utf8');
@@ -117,7 +148,9 @@ function startHelper() {
   helper.on('exit', () => {
     helper = null; helperClips = false; filesOnClip = false;
     for (const [id, r] of pending) { pending.delete(id); r(null); }
-    if (!quitting) setTimeout(startHelper, 2000);
+    if (menuOpen) closeMenu();
+    helperFails = Date.now() - helperAt < 15000 ? helperFails + 1 : 0;
+    if (!quitting) setTimeout(startHelper, Math.min(60000, 2000 * 2 ** helperFails));
   });
 }
 const hsend = cmd => helper?.stdin.write(cmd + '\n');
@@ -230,7 +263,7 @@ async function readClip() {
   if (!entry) return null;
   if (entry.types.includes('text/plain')) {
     const text = await (await entry.getType('text/plain')).text();
-    if (text.trim()) return { sig: 't:' + text, kind: 'text', text: text.slice(0, 20000) };
+    if (text.trim()) return { sig: text.length > 4000 ? 't#' + crypto.createHash('md5').update(text).digest('hex') : 't:' + text, kind: 'text', text: text.slice(0, 20000) };
   }
   const type = entry.types.find(t => t.startsWith('image/'));
   if (type) {
@@ -460,10 +493,14 @@ function onAltWheel(delta) {
   }, 1100);
 }
 
-let menuOpen = false;
+// while the menu is up, arrows/enter/digits are captured system wide, so it never stays up unattended
+let menuOpen = false, menuItems = [], menuIdleT = null;
+const menuIdle = () => { clearTimeout(menuIdleT); menuIdleT = setTimeout(closeMenu, 20000); };
 function openMenu() {
   if (menuOpen) return closeMenu();
-  if (!history.length) return;
+  if (!history.length || !helper) return;
+  menuItems = history.slice(0, 40);
+  menuIdle();
   const p = screen.getCursorScreenPoint();
   const wa = screen.getDisplayNearestPoint(p).workArea;
   const h = 460;
@@ -472,7 +509,7 @@ function openMenu() {
     y: Math.round(clamp(p.y + 10, wa.y + 8, wa.y + wa.height - h - 8)),
     width: MENU_W, height: h,
   });
-  menu.webContents.send('open', { items: history.slice(0, 40).map(withIcon), current: currentId });
+  menu.webContents.send('open', { items: menuItems.map(withIcon), current: currentId });
   menu.showInactive();
   menuOpen = true;
   hsend('keys 1');
@@ -480,6 +517,7 @@ function openMenu() {
 function closeMenu() {
   if (!menuOpen) return;
   menuOpen = false;
+  clearTimeout(menuIdleT);
   hsend('keys 0');
   menu.webContents.send('close');
   setTimeout(() => { if (!menuOpen) menu.hide(); }, 170);
@@ -491,11 +529,12 @@ async function pasteItem(item) {
 }
 function onMenuKey(vk) {
   if (!menuOpen) return;
+  menuIdle();
   if (vk === 0x26) menu.webContents.send('move', -1);
   else if (vk === 0x28) menu.webContents.send('move', 1);
   else if (vk === 0x0D) menu.webContents.send('enter');
   else if (vk === 0x1B) closeMenu();
-  else if (vk >= 0x31 && vk <= 0x39) pasteItem(history[vk - 0x31]);
+  else if (vk >= 0x31 && vk <= 0x39) pasteItem(menuItems[vk - 0x31]);
 }
 function onGlobalClick(x, y) {
   if (!menuOpen) return;
@@ -807,4 +846,4 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', e => e.preventDefault());
-app.on('will-quit', () => { quitting = true; globalShortcut.unregisterAll(); helper?.kill(); });
+app.on('will-quit', () => { quitting = true; flushNow(); globalShortcut.unregisterAll(); helper?.kill(); });
